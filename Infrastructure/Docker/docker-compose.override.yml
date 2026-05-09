@@ -1,0 +1,47 @@
+services:
+  # =========================================
+  # TIER 1: INFRASTRUCTURE
+  # =========================================
+  postgres:
+    environment:
+      # Local development often uses simpler logging
+      - POSTGRES_LOG_STATEMENT=all
+    ports:
+      - "5432:5432" # Ensure port is exposed for pgAdmin/DBeaver
+
+  jaeger:
+    ports:
+      - "16686:16686" # Jaeger UI
+      - "4317:4317"   # gRPC
+      - "4318:4318"   # HTTP
+
+  # =========================================
+  # TIER 2: IDENTITY & ACCESS MANAGEMENT
+  # =========================================
+  keycloak:
+    environment:
+      # Override production hostname with localhost
+      - KC_HOSTNAME=localhost
+      - KC_HOSTNAME_STRICT=false
+      - KC_HTTP_ENABLED=true
+    # Switch back to dev mode for faster startup and hot-reloading of themes/configs
+    command: start-dev 
+
+  # =========================================
+  # TIER 3: APPLICATION SERVICES
+  # =========================================
+  gateway:
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - LOGGING__LOGLEVEL__DEFAULT=Debug
+      # Point to localhost for local browser redirects
+      - GW_Keycloak_Address=http://keycloak:8080/
+      - GW_Customer_Service_Address=http://customer-service:8080/
+
+  customer-service:
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - LOGGING__LOGLEVEL__DEFAULT=Debug
+      # Authority must be localhost so your local browser can validate tokens
+      - Keycloak__Authority=http://localhost:8080/realms/cargo
+      - Keycloak__MetadataAddress=http://keycloak:8080/realms/cargo/.well-known/openid-configuration

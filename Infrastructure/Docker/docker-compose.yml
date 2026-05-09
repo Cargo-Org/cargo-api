@@ -4,10 +4,9 @@ networks:
 
 services:
   # =========================================
-  # TIER 1: INFRASTRUCTURE & DATA STORES
+  # TIER 1: INFRASTRUCTURE
   # =========================================
   postgres:
-    # Always pin major versions. Alpine variants keep the image surface area small.
     image: postgres:18.3
     container_name: dev_postgres
     restart: unless-stopped
@@ -16,100 +15,18 @@ services:
     ports:
       - "5432:5432"
     environment:
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_MULTIPLE_DATABASES: ${POSTGRES_MULTIPLE_DATABASES}
+      POSTGRES_USER: ${KC_DB_USERNAME}
+      POSTGRES_PASSWORD: ${KC_DB_PASSWORD}
+      POSTGRES_MULTIPLE_DATABASES: "keycloak_db,customer_db"
     volumes:
-      # Named volume guarantees data persistence across restarts
       - postgres_data:/var/lib/postgresql
-      # Mounts our custom script to create multiple DBs on first run
       - ./init-scripts:/docker-entrypoint-initdb.d
     healthcheck:
-      # Crucial: allows other containers to wait until the DB is ACTUALLY ready to accept connections
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      test: ["CMD-SHELL", "pg_isready -U ${KC_DB_USERNAME} -d keycloak_db"]
       interval: 5s
       timeout: 5s
       retries: 5
 
-  rabbitmq:
-    # Use the '-management' tag to get the UI built-in
-    image: rabbitmq:4.3.0-management-alpine
-    container_name: dev_rabbitmq
-    restart: unless-stopped
-    networks:
-      - delivery-net
-    ports:
-      - "5672:5672"   # AMQP protocol port (Microservices connect here)
-      - "15672:15672"  # UI port
-    environment:
-      RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER}
-      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS}
-    volumes:
-      - rabbitmq_data:/var/lib/rabbitmq
-    healthcheck:
-      test: rabbitmq-diagnostics -q ping
-      interval: 10s
-      timeout: 10s
-      retries: 3
-
-  redis:
-    image: redis:8.6.2-alpine
-    container_name: dev_redis
-    restart: unless-stopped
-    networks:
-      - delivery-net
-    ports:
-      - "6379:6379"
-    # Enable append-only file for persistent caching
-    command: redis-server --appendonly yes
-    volumes:
-      - redis_data:/data
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 3
-
-  minio:
-    image: pgsty/minio:RELEASE.2026-04-17T00-00-00Z
-    container_name: dev_minio
-    restart: unless-stopped
-    networks:
-      - delivery-net
-    ports:
-      - "9000:9000"   # S3 API Port
-      - "9001:9001"   # Web UI Console Port
-    environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
-    command: server /data --console-address ":9001"
-    volumes:
-      - minio_data:/data
-
-  minio-waiter:
-    image: curlimages/curl:8.20.0
-    container_name: dev_minio_waiter
-    networks:
-      - delivery-net
-    depends_on:
-      minio:
-        condition: service_started
-    restart: "no"
-    command: ["sh", "-c", "echo 'Waiting for MinIO...'; i=0; while ! curl -s -f http://minio:9000/minio/health/live > /dev/null; do i=$$((i+1)); if [ $$i -ge 20 ]; then echo 'ERROR: MinIO did not become ready after 60 seconds. Giving up.'; exit 1; fi; echo \"Attempt $$i/20 — retrying in 3 seconds...\"; sleep 3; done; echo 'MinIO is ready.';"]
-
-  minio-init:
-    image: minio/mc:RELEASE.2025-08-13T08-35-41Z
-    container_name: dev_minio_init
-    networks:
-      - delivery-net
-    depends_on:
-      minio-waiter:
-        condition: service_completed_successfully
-    environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
-    entrypoint: /bin/sh -c "echo 'Connecting to MinIO...'; mc alias set localminio http://minio:9000 $${MINIO_ROOT_USER} $${MINIO_ROOT_PASSWORD}; echo 'Creating bucket cargo-customer-documents...'; mc mb localminio/cargo-customer-documents --ignore-existing; echo 'MinIO initialization complete! Shutting down init container.'; exit 0;"  
-  
   jaeger:
     image: jaegertracing/all-in-one:1.55
     container_name: dev_jaeger
@@ -117,11 +34,9 @@ services:
     networks:
       - delivery-net
     ports:
-      - "16686:16686"  # Jaeger Web UI
-      - "4317:4317"   # OTLP gRPC receiver
-      - "4318:4318"   # OTLP HTTP receiver
+      - "16686:16686" # UI
+      - "4317:4317"   # OTLP gRPC
     environment:
-      # Explicitly enable the OpenTelemetry Protocol receivers
       COLLECTOR_OTLP_ENABLED: "true"
 
   # =========================================
@@ -129,30 +44,29 @@ services:
   # =========================================
   keycloak:
     image: quay.io/keycloak/keycloak:26.6.0
-    container_name: dev_keycloak
+    container_name: keycloak
     restart: unless-stopped
     networks:
       - delivery-net
     depends_on:
       postgres:
-        # Keycloak will crash if it boots before Postgres is ready. This fixes that.
         condition: service_healthy
     ports:
       - "8080:8080"
     environment:
-      # Tell Keycloak to use our Postgres DB instead of its default in-memory H2 DB
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KC_BOOTSTRAP_ADMIN_USERNAME}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KC_BOOTSTRAP_ADMIN_PASSWORD}
       KC_DB: postgres
-      KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
-      KC_DB_USERNAME: ${POSTGRES_USER}
-      KC_DB_PASSWORD: ${POSTGRES_PASSWORD}
-      KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN}
-      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD}
-      KC_HOSTNAME: "http://localhost:8080"
+      KC_DB_URL: ${KC_DB_URL}
+      KC_DB_USERNAME: ${KC_DB_USERNAME}
+      KC_DB_PASSWORD: ${KC_DB_PASSWORD}
+      KC_HOSTNAME: ${KC_HOSTNAME}
       KC_HOSTNAME_STRICT: "false"
       KC_HTTP_ENABLED: "true"
-      KC_HEALTH_ENABLED: "true"   # also enables /health endpoints
-      KC_HOSTNAME_BACKCHANNEL_DYNAMIC: "true"
-    command: start-dev
+      KC_HEALTH_ENABLED: "true"
+      KC_PORT: 8080
+      KC_PROXY_HEADERS: xforwarded
+    command: start --optimized
 
   keycloak-waiter:
     image: curlimages/curl:8.20.0
@@ -184,15 +98,18 @@ services:
     ports:
       - "5000:8080"
     environment:
-      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_ENVIRONMENT: ${GW_ASPNETCORE_ENVIRONMENT}
       OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4317
       OTEL_EXPORTER_OTLP_PROTOCOL: grpc
+      # Reverse Proxy Overrides - Pointing to internal Docker DNS
+      ReverseProxy__Clusters__customer-cluster__Destinations__customer-service__Address: ${GW_Customer_Service_Address}
+      ReverseProxy__Clusters__keycloak-cluster__Destinations__keycloak-destination__Address: ${GW_Keycloak_Address}
 
   customer-service:
     build:
       context: ../../
       dockerfile: src/Services/Cargo.CustomerService/Dockerfile
-    container_name: cargo_customer_service
+    container_name: customer-service
     restart: unless-stopped
     networks:
       - delivery-net
@@ -203,24 +120,23 @@ services:
         condition: service_started
       keycloak-waiter:
         condition: service_completed_successfully
-      minio-waiter:
-        condition: service_completed_successfully
-    ports:
-      - "5001:8080"   # Temporary — for direct testing during development
     environment:
-      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_ENVIRONMENT: ${CS_ASPNETCORE_ENVIRONMENT}
+      ConnectionStrings__CustomerDb: ${CS_Connection_String}
       OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4317
       OTEL_EXPORTER_OTLP_PROTOCOL: grpc
-      ConnectionStrings__CustomerDb: "Host=postgres;Port=5432;Database=customer_db;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}"
-      Keycloak_Backend__ClientSecret: ${KEYCLOAK_BACKEND_CLIENT_SECRET}
-      # MinIO / S3 credentials
-      Storage__Endpoint: http://minio:9000
-      Storage__AccessKey: ${MINIO_ROOT_USER}
-      Storage__SecretKey: ${MINIO_ROOT_PASSWORD}
+      # Keycloak Security
+      Keycloak__Authority: ${CS_KC_Authority}
+      Keycloak__MetadataAddress: ${CS_KC_MetadataAddress}
+      Keycloak__Audience: ${CS_KC_Audience}
+      Keycloak_Backend__ClientId: ${CS_KC_Backend_ClientId}
+      Keycloak_Backend__ClientSecret: ${CS_KC_Backend_ClientSecret}
+      # Cloudflare R2 Storage
+      Storage__Endpoint: ${CS_CF_Storage_Endpoint}
+      Storage__AccessKey: ${CS_CF_Storage_AccessKey}
+      Storage__SecretKey: ${CS_CF_Storage_SecretKey}
+      Storage__BucketName: ${CS_CF_Storage_BucketName}
+      Storage__ForcePathStyle: ${CS_CF_Storage_ForcePathStyle}
 
-# Define our persistent named volumes
 volumes:
   postgres_data:
-  rabbitmq_data:
-  redis_data:
-  minio_data:
