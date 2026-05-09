@@ -80,7 +80,7 @@ services:
       KC_HTTP_ENABLED: "true"
       KC_HEALTH_ENABLED: "true"
       KC_PORT: 8080
-      KC_HOSTNAME_BACKCHANNEL_DYNAMIC: "true"
+      KC_HOSTNAME_BACKCHANNEL_DYNAMIC: ${KC_HOSTNAME_BACKCHANNEL_DYNAMIC}
       KC_HTTP_RELATIVE_PATH: /keycloak
       KC_PROXY_HEADERS: xforwarded
     entrypoint: ["/bin/sh", "-c"]
