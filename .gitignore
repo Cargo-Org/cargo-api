@@ -58,3 +58,5 @@ nunit-*.xml
 
 # Visual Studio
 .vs/
+
+docker-compose.override.yml
