@@ -126,6 +126,8 @@ services:
       Keycloak__Authority: ${CS_KC_Authority}
       Keycloak__MetadataAddress: ${CS_KC_MetadataAddress}
       Keycloak__Audience: ${CS_KC_Audience}
+    extra_hosts:
+      - "cargo.northeurope.cloudapp.azure.com:host-gateway"
 
   customer-service:
     build:
@@ -160,6 +162,8 @@ services:
       Storage__SecretKey: ${CS_CF_Storage_SecretKey}
       Storage__BucketName: ${CS_CF_Storage_BucketName}
       Storage__ForcePathStyle: ${CS_CF_Storage_ForcePathStyle}
+    extra_hosts:
+      - "cargo.northeurope.cloudapp.azure.com:host-gateway"
 
 volumes:
   postgres_data:
