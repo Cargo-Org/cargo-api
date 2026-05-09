@@ -122,6 +122,9 @@ services:
       # Reverse Proxy Overrides - Pointing to internal Docker DNS
       ReverseProxy__Clusters__customer-cluster__Destinations__customer-service__Address: ${GW_Customer_Service_Address}
       ReverseProxy__Clusters__keycloak-cluster__Destinations__keycloak-destination__Address: ${GW_Keycloak_Address}
+      Keycloak__Authority: ${CS_KC_Authority}
+      Keycloak__MetadataAddress: ${CS_KC_MetadataAddress}
+      Keycloak__Audience: ${CS_KC_Audience}
 
   customer-service:
     build:
