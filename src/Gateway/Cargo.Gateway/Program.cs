@@ -23,6 +23,7 @@ builder.Services
         options.Authority = keycloakAuthority;
         options.MetadataAddress = keycloakMetadataAddress;
         options.MapInboundClaims = false;
+        options.RequireHttpsMetadata = false;
         options.TokenValidationParameters = new TokenValidationParameters
         {
             ValidateIssuer = true,
