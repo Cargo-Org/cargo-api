@@ -1,0 +1,226 @@
+networks:
+  delivery-net:
+    driver: bridge
+
+services:
+  # =========================================
+  # TIER 1: INFRASTRUCTURE & DATA STORES
+  # =========================================
+  postgres:
+    # Always pin major versions. Alpine variants keep the image surface area small.
+    image: postgres:18.3
+    container_name: dev_postgres
+    restart: unless-stopped
+    networks:
+      - delivery-net
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_MULTIPLE_DATABASES: ${POSTGRES_MULTIPLE_DATABASES}
+    volumes:
+      # Named volume guarantees data persistence across restarts
+      - postgres_data:/var/lib/postgresql
+      # Mounts our custom script to create multiple DBs on first run
+      - ./init-scripts:/docker-entrypoint-initdb.d
+    healthcheck:
+      # Crucial: allows other containers to wait until the DB is ACTUALLY ready to accept connections
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  rabbitmq:
+    # Use the '-management' tag to get the UI built-in
+    image: rabbitmq:4.3.0-management-alpine
+    container_name: dev_rabbitmq
+    restart: unless-stopped
+    networks:
+      - delivery-net
+    ports:
+      - "5672:5672"   # AMQP protocol port (Microservices connect here)
+      - "15672:15672"  # UI port
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS}
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: rabbitmq-diagnostics -q ping
+      interval: 10s
+      timeout: 10s
+      retries: 3
+
+  redis:
+    image: redis:8.6.2-alpine
+    container_name: dev_redis
+    restart: unless-stopped
+    networks:
+      - delivery-net
+    ports:
+      - "6379:6379"
+    # Enable append-only file for persistent caching
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  minio:
+    image: pgsty/minio:RELEASE.2026-04-17T00-00-00Z
+    container_name: dev_minio
+    restart: unless-stopped
+    networks:
+      - delivery-net
+    ports:
+      - "9000:9000"   # S3 API Port
+      - "9001:9001"   # Web UI Console Port
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    command: server /data --console-address ":9001"
+    volumes:
+      - minio_data:/data
+
+  minio-waiter:
+    image: curlimages/curl:8.20.0
+    container_name: dev_minio_waiter
+    networks:
+      - delivery-net
+    depends_on:
+      minio:
+        condition: service_started
+    restart: "no"
+    command: ["sh", "-c", "echo 'Waiting for MinIO...'; i=0; while ! curl -s -f http://minio:9000/minio/health/live > /dev/null; do i=$$((i+1)); if [ $$i -ge 20 ]; then echo 'ERROR: MinIO did not become ready after 60 seconds. Giving up.'; exit 1; fi; echo \"Attempt $$i/20 — retrying in 3 seconds...\"; sleep 3; done; echo 'MinIO is ready.';"]
+
+  minio-init:
+    image: minio/mc:RELEASE.2025-08-13T08-35-41Z
+    container_name: dev_minio_init
+    networks:
+      - delivery-net
+    depends_on:
+      minio-waiter:
+        condition: service_completed_successfully
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    entrypoint: /bin/sh -c "echo 'Connecting to MinIO...'; mc alias set localminio http://minio:9000 $${MINIO_ROOT_USER} $${MINIO_ROOT_PASSWORD}; echo 'Creating bucket cargo-customer-documents...'; mc mb localminio/cargo-customer-documents --ignore-existing; echo 'MinIO initialization complete! Shutting down init container.'; exit 0;"  
+  
+  jaeger:
+    image: jaegertracing/all-in-one:1.55
+    container_name: dev_jaeger
+    restart: unless-stopped
+    networks:
+      - delivery-net
+    ports:
+      - "16686:16686"  # Jaeger Web UI
+      - "4317:4317"   # OTLP gRPC receiver
+      - "4318:4318"   # OTLP HTTP receiver
+    environment:
+      # Explicitly enable the OpenTelemetry Protocol receivers
+      COLLECTOR_OTLP_ENABLED: "true"
+
+  # =========================================
+  # TIER 2: IDENTITY & ACCESS MANAGEMENT
+  # =========================================
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.6.0
+    container_name: dev_keycloak
+    restart: unless-stopped
+    networks:
+      - delivery-net
+    depends_on:
+      postgres:
+        # Keycloak will crash if it boots before Postgres is ready. This fixes that.
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+    environment:
+      # Tell Keycloak to use our Postgres DB instead of its default in-memory H2 DB
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
+      KC_DB_USERNAME: ${POSTGRES_USER}
+      KC_DB_PASSWORD: ${POSTGRES_PASSWORD}
+      KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN}
+      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD}
+      KC_HOSTNAME: "http://localhost:8080"
+      KC_HOSTNAME_STRICT: "false"
+      KC_HTTP_ENABLED: "true"
+      KC_HEALTH_ENABLED: "true"   # also enables /health endpoints
+      KC_HOSTNAME_BACKCHANNEL_DYNAMIC: "true"
+    command: start-dev
+
+  keycloak-waiter:
+    image: curlimages/curl:8.20.0
+    container_name: dev_keycloak_waiter
+    networks:
+      - delivery-net
+    depends_on:
+      keycloak:
+        condition: service_started
+    restart: "no"
+    command: ["sh", "-c", "echo 'Waiting for Keycloak...'; i=0; while ! curl -s -f http://keycloak:9000/health/ready > /dev/null; do i=$$((i+1)); if [ $$i -ge 20 ]; then echo 'ERROR: Keycloak did not become ready after 60 seconds. Giving up.'; exit 1; fi; echo \"Attempt $$i/20 — retrying in 3 seconds...\"; sleep 3; done; echo 'Keycloak is ready.';"]
+
+  # =========================================
+  # TIER 3: APPLICATION SERVICES
+  # =========================================
+  gateway:
+    build:
+      context: ../../
+      dockerfile: src/Gateway/Cargo.Gateway/Dockerfile
+    container_name: cargo_gateway
+    restart: unless-stopped
+    networks:
+      - delivery-net
+    depends_on:
+      keycloak-waiter:
+        condition: service_completed_successfully
+      jaeger:
+        condition: service_started
+    ports:
+      - "5000:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4317
+      OTEL_EXPORTER_OTLP_PROTOCOL: grpc
+
+  customer-service:
+    build:
+      context: ../../
+      dockerfile: src/Services/Cargo.CustomerService/Dockerfile
+    container_name: cargo_customer_service
+    restart: unless-stopped
+    networks:
+      - delivery-net
+    depends_on:
+      postgres:
+        condition: service_healthy
+      jaeger:
+        condition: service_started
+      keycloak-waiter:
+        condition: service_completed_successfully
+      minio-waiter:
+        condition: service_completed_successfully
+    ports:
+      - "5001:8080"   # Temporary — for direct testing during development
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4317
+      OTEL_EXPORTER_OTLP_PROTOCOL: grpc
+      ConnectionStrings__CustomerDb: "Host=postgres;Port=5432;Database=customer_db;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}"
+      Keycloak_Backend__ClientSecret: ${KEYCLOAK_BACKEND_CLIENT_SECRET}
+      # MinIO / S3 credentials
+      Storage__Endpoint: http://minio:9000
+      Storage__AccessKey: ${MINIO_ROOT_USER}
+      Storage__SecretKey: ${MINIO_ROOT_PASSWORD}
+
+# Define our persistent named volumes
+volumes:
+  postgres_data:
+  rabbitmq_data:
+  redis_data:
+  minio_data:

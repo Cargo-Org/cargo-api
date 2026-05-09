@@ -1,0 +1,53 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+	<PropertyGroup>
+	<TargetFramework>net10.0</TargetFramework>
+	<Nullable>enable</Nullable>
+	<ImplicitUsings>enable</ImplicitUsings>
+	<UserSecretsId>7351652d-4efb-4ff0-9cc4-40742608191a</UserSecretsId>
+	<DockerDefaultTargetOS>Linux</DockerDefaultTargetOS>
+	<DockerfileContext>..\..\..</DockerfileContext>
+	</PropertyGroup>
+
+
+	<ItemGroup>
+		<!-- JWT Bearer authentication middleware -->
+		<PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.*" />
+
+		<!-- OpenAPI document generation — built into .NET 10, no extra NuGet needed beyond this -->
+		<PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.*" />
+		<PackageReference Include="Microsoft.VisualStudio.Azure.Containers.Tools.Targets" Version="1.23.0" />
+
+		<!-- Scalar UI — renders the OpenAPI document as interactive documentation -->
+		<PackageReference Include="Scalar.AspNetCore" Version="2.*" />
+
+		<!-- Entity Framework Core — the ORM -->
+		<PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.*" />
+
+		<!-- EF Core design tools — needed to run dotnet ef migrations add -->
+		<PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.*" />
+
+		<!-- PostgreSQL driver for EF Core -->
+		<PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.*" />
+
+		<!-- MediatR — mediator pattern, CQRS dispatch -->
+		<PackageReference Include="MediatR" Version="12.*" />
+
+		<!-- FluentValidation — strongly typed validation rules -->
+		<PackageReference Include="FluentValidation" Version="11.*" />
+
+		<!-- FluentValidation DI extensions — RegisterValidatorsFromAssembly -->
+		<PackageReference Include="FluentValidation.DependencyInjectionExtensions" Version="11.*" />
+
+		<!-- AWS SDK S3 — talks to MinIO using the S3-compatible API -->
+		<PackageReference Include="AWSSDK.S3" Version="3.*" />
+	</ItemGroup>
+
+
+	<ItemGroup>
+	  <ProjectReference Include="..\..\BuildingBlocks\Cargo.BuildingBlocks\Cargo.BuildingBlocks.csproj" />
+	  <ProjectReference Include="..\..\BuildingBlocks\Cargo.Observability\Cargo.Observability.csproj" />
+	</ItemGroup>
+
+
+</Project>

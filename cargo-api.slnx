@@ -1,6 +1,12 @@
 <Solution>
-  <Project Path="Api/Api.csproj" />
-  <Project Path="docker-compose.dcproj">
-    <Build />
-  </Project>
+  <Folder Name="/Solution Items/">
+    <File Path="global.json" />
+  </Folder>
+  <Folder Name="/src/" />
+  <Folder Name="/src/BuildingBlocks/">
+    <Project Path="src/BuildingBlocks/Cargo.BuildingBlocks/Cargo.BuildingBlocks.csproj" />
+  </Folder>
+  <Project Path="src/BuildingBlocks/Cargo.Observability/Cargo.Observability.csproj" />
+  <Project Path="src/Gateway/Cargo.Gateway/Cargo.Gateway.csproj" />
+  <Project Path="src/Services/Cargo.CustomerService/Cargo.CustomerService.csproj" />
 </Solution>
