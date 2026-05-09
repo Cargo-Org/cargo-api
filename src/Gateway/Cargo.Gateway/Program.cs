@@ -1,6 +1,7 @@
 using Cargo.Observability;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
+using Scalar.AspNetCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -48,6 +49,21 @@ var app = builder.Build();
 // Health check — anonymous
 app.MapGet("/health", () => Results.Ok(new { status = "healthy" }))
     .AllowAnonymous();
+
+if (app.Environment.IsDevelopment())
+{
+    app.MapScalarApiReference("/scalar/customers", options =>
+    {
+        options.Title = "Cargo — Customer Service";
+        options.OpenApiRoutePattern = "/openapi/customers";
+        options.Authentication = new ScalarAuthenticationOptions { };
+        options.AddPreferredSecuritySchemes("Bearer");
+        options.DefaultHttpClient = new(ScalarTarget.Http, ScalarClient.HttpClient);
+    });
+
+    // When Order Service is built in Phase 3:
+    // app.MapScalarApiReference("/scalar/orders", options => { ... });
+}
 
 app.UseAuthentication();
 app.UseAuthorization();

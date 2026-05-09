@@ -149,7 +149,7 @@ services:
       ConnectionStrings__CustomerDb: ${CS_Connection_String}
       OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4317
       OTEL_EXPORTER_OTLP_PROTOCOL: grpc
-      Gateway__BaseUrl: https://cargo.northeurope.cloudapp.azure.com
+      Gateway__BaseUrl: ${CS_GW_Url}
       # Keycloak Security
       Keycloak__Authority: ${CS_KC_Authority}
       Keycloak__MetadataAddress: ${CS_KC_MetadataAddress}
