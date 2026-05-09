@@ -85,7 +85,7 @@ services:
       KC_PROXY_HEADERS: xforwarded
     entrypoint: ["/bin/sh", "-c"]
     command:
-      - "/opt/keycloak/bin/kc.sh start --optimized || echo 'Optimized start failed! Falling back to standard start...' && /opt/keycloak/bin/kc.sh start"
+      - "/opt/keycloak/bin/kc.sh start-dev"
 
   keycloak-waiter:
     image: curlimages/curl:8.20.0
