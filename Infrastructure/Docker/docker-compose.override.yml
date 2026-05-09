@@ -45,3 +45,5 @@ services:
       # Authority must be localhost so your local browser can validate tokens
       - Keycloak__Authority=http://localhost:8080/realms/cargo
       - Keycloak__MetadataAddress=http://keycloak:8080/realms/cargo/.well-known/openid-configuration
+      # For local development, the API must also point to localhost so that your local browser can call it directly (e.g. for Swagger UI)
+      - Gateway__BaseUrl= http://localhost:5000 

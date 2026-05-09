@@ -39,6 +39,23 @@ services:
     environment:
       COLLECTOR_OTLP_ENABLED: "true"
 
+  caddy:
+    image: caddy:2.11.2-alpine
+    container_name: caddy_proxy
+    restart: unless-stopped
+    networks:
+      - delivery-net
+    depends_on:
+      keycloak-waiter:
+        condition: service_started
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data   # Saves the SSL certificates so it doesn't request new ones on reboot
+      - caddy_config:/config
+
   # =========================================
   # TIER 2: IDENTITY & ACCESS MANAGEMENT
   # =========================================
@@ -51,8 +68,6 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-    ports:
-      - "8080:8080"
     environment:
       KC_BOOTSTRAP_ADMIN_USERNAME: ${KC_BOOTSTRAP_ADMIN_USERNAME}
       KC_BOOTSTRAP_ADMIN_PASSWORD: ${KC_BOOTSTRAP_ADMIN_PASSWORD}
@@ -65,8 +80,11 @@ services:
       KC_HTTP_ENABLED: "true"
       KC_HEALTH_ENABLED: "true"
       KC_PORT: 8080
+      KC_HTTP_RELATIVE_PATH: /keycloak
       KC_PROXY_HEADERS: xforwarded
-    command: start --optimized
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - "/opt/keycloak/bin/kc.sh start --optimized || echo 'Optimized start failed! Falling back to standard start...' && /opt/keycloak/bin/kc.sh start"
 
   keycloak-waiter:
     image: curlimages/curl:8.20.0
@@ -77,7 +95,9 @@ services:
       keycloak:
         condition: service_started
     restart: "no"
-    command: ["sh", "-c", "echo 'Waiting for Keycloak...'; i=0; while ! curl -s -f http://keycloak:9000/health/ready > /dev/null; do i=$$((i+1)); if [ $$i -ge 20 ]; then echo 'ERROR: Keycloak did not become ready after 60 seconds. Giving up.'; exit 1; fi; echo \"Attempt $$i/20 — retrying in 3 seconds...\"; sleep 3; done; echo 'Keycloak is ready.';"]
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - 'i=0; echo "Waiting for Keycloak..."; while ! curl -s -f http://keycloak:9000/keycloak/health/ready > /dev/null; do i=$$((i+1)); if [ $$i -ge 30 ]; then echo "ERROR: Keycloak timeout after 90 seconds"; exit 1; fi; echo "Attempt $$i/30 - retrying in 3s..."; sleep 3; done; echo "Keycloak is ready."'
 
   # =========================================
   # TIER 3: APPLICATION SERVICES
@@ -95,8 +115,6 @@ services:
         condition: service_completed_successfully
       jaeger:
         condition: service_started
-    ports:
-      - "5000:8080"
     environment:
       ASPNETCORE_ENVIRONMENT: ${GW_ASPNETCORE_ENVIRONMENT}
       OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4317
@@ -125,6 +143,7 @@ services:
       ConnectionStrings__CustomerDb: ${CS_Connection_String}
       OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4317
       OTEL_EXPORTER_OTLP_PROTOCOL: grpc
+      Gateway__BaseUrl: https://cargo.northeurope.cloudapp.azure.com
       # Keycloak Security
       Keycloak__Authority: ${CS_KC_Authority}
       Keycloak__MetadataAddress: ${CS_KC_MetadataAddress}
@@ -140,3 +159,5 @@ services:
 
 volumes:
   postgres_data:
+  caddy_data:
+  caddy_config:

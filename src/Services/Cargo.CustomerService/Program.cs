@@ -13,6 +13,7 @@ using MediatR;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using Microsoft.OpenApi;
 using Scalar.AspNetCore;
 using System.Security.Claims;
 using System.Text.Json;
@@ -23,31 +24,48 @@ var builder = WebApplication.CreateBuilder(args);
 builder.AddCargoObservability("cargo-customer-service");
 
 // ── OpenAPI / Documentation ──────────────────────────────────────
-builder.Services.AddOpenApi();
+builder.Services.AddOpenApi(options =>
+{
+    // Set server URL to gateway URL + service prefix
+    // so Scalar "Try It" sends requests to the gateway, not the service directly
+    options.AddDocumentTransformer((document, context, ct) =>
+    {
+        var gatewayBaseUrl = builder.Configuration["Gateway:BaseUrl"]
+            ?? throw new InvalidOperationException("Gateway:BaseUrl is required.");
+
+        document.Info.Title = "Cargo — Customer Service";
+        document.Info.Version = "v1";
+        document.Servers = [new() { Url = $"{gatewayBaseUrl}/api/customers" }];
+
+        // Add JWT Bearer security scheme so Scalar shows the auth input
+        document.Components ??= new();
+        document.Components.SecuritySchemes = new Dictionary<string, IOpenApiSecurityScheme>
+        {
+            { "Bearer", new OpenApiSecurityScheme 
+                {
+                    Type = SecuritySchemeType.Http,
+                    Scheme = "bearer",
+                    BearerFormat = "JWT",
+                    Description = "Paste your access_token here. Get one from POST /api/auth/token"
+                } 
+            }
+        };
+
+        return Task.CompletedTask;
+    });
+});
 
 // ── Authentication — JWT Bearer ──────────────────────────────────
-// Concept: Every service validates JWTs independently (defense in depth).
-// The gateway already validated this token. We validate it again anyway.
-// RequireHttpsMetadata is false for local dev only. Set true in production.
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {
-        // Authority is the issuer URL — what the token's iss claim must match.
-        // Used for discovery but ValidIssuer is what actually validates.
         options.Authority = builder.Configuration["Keycloak:Authority"]
             ?? throw new InvalidOperationException("Keycloak:Authority is required.");
 
-        // MetadataAddress is the backchannel URL — used ONLY inside Docker.
-        // Fetches the JWKS (JSON Web Key Set) signing keys from Keycloak
-        // using the Docker internal hostname, not localhost.
         options.MetadataAddress = builder.Configuration["Keycloak:MetadataAddress"]
             ?? throw new InvalidOperationException("Keycloak:MetadataAddress is required.");
 
-        options.RequireHttpsMetadata = false; // false for local dev only
-
-        // Preserve JWT claim names exactly as issued by Keycloak.
-        // When true (the default), .NET remaps 'sub' to the long-form
-        // NameIdentifier URN, breaking FindFirstValue("sub") calls.
+        options.RequireHttpsMetadata = false;
         options.MapInboundClaims = false;
 
         options.TokenValidationParameters = new TokenValidationParameters
@@ -62,14 +80,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 
             ValidateLifetime = true,
             ValidateIssuerSigningKey = true,
-
-            // ClockSkew: allows 30 seconds of clock drift between machines.
-            // Zero skew is too strict for distributed systems.
-            // The default is 5 minutes which is too generous.
             ClockSkew = TimeSpan.FromSeconds(30),
-
-            // NameClaimType: tells .NET which JWT claim to use as User.Identity.Name
-            // We use sub — the permanent identity anchor.
             NameClaimType = "sub"
         };
     });
@@ -93,9 +104,6 @@ builder.Services.AddAuthorizationBuilder()
     }));
 
 // ── MediatR ──────────────────────────────────────────────────────
-// Scans this assembly for all IRequestHandler implementations.
-// Pipeline behaviors are executed in registration order:
-// LoggingBehavior wraps ValidationBehavior wraps the handler.
 builder.Services.AddMediatR(cfg =>
 {
     cfg.RegisterServicesFromAssembly(typeof(Program).Assembly);
@@ -104,7 +112,6 @@ builder.Services.AddMediatR(cfg =>
 });
 
 // ── FluentValidation ─────────────────────────────────────────────
-// Scans this assembly for all AbstractValidator implementations.
 builder.Services.AddValidatorsFromAssembly(typeof(Program).Assembly);
 
 // ── Database ──────────────────────────────────────────────────────
@@ -116,8 +123,6 @@ builder.Services.AddDbContextPool<CustomerDbContext>(options =>
 
     options.UseNpgsql(connectionString);
 
-    // In development, log EF Core queries and enable detailed errors.
-    // Never enable sensitive data logging in production — it logs parameter values.
     if (builder.Environment.IsDevelopment())
     {
         options.EnableDetailedErrors();
@@ -132,17 +137,20 @@ builder.Services.AddScoped<IStorageService, StorageService>();
 builder.Services.AddHealthChecks();
 
 // ── HTTP Client Factory ───────────────────────────────────────────
-// Named client for Keycloak Admin API calls.
-// BaseAddress is NOT set here — KeycloakAdminClient builds full URLs
-// from configuration to keep the factory registration generic.
 builder.Services.AddHttpClient("keycloak-admin");
 
 // ── Infrastructure Services ───────────────────────────────────────
-// Singleton: caches the Keycloak admin token across requests.
-// IHttpClientFactory is injected — never HttpClient directly into a Singleton.
 builder.Services.AddSingleton<IKeycloakAdminClient, KeycloakAdminClient>();
 
 var app = builder.Build();
+
+// ── Automatic Migrations ─────────────────────────────────────────
+using (var scope = app.Services.CreateScope())
+{
+    var dbContext = scope.ServiceProvider.GetRequiredService<CustomerDbContext>();
+    // This will apply any pending migrations to the database on startup
+    dbContext.Database.Migrate();
+}
 
 app.UseExceptionHandler(errorApp => errorApp.Run(async context =>
 {
@@ -155,9 +163,8 @@ app.UseExceptionHandler(errorApp => errorApp.Run(async context =>
         detail = "The server encountered an internal error. Please try again later."
     });
 }));
+
 // ── Documentation (Development only) ────────────────────────────
-// MapOpenApi generates the /openapi/v1.json document.
-// MapScalarApiReference renders the interactive UI at /scalar/v1.
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
@@ -165,19 +172,12 @@ if (app.Environment.IsDevelopment())
 }
 
 // ── Middleware order — this is critical ──────────────────────────
-// Each middleware calls the next one in the chain.
-// Authentication must come before Authorization.
-// Both must come before endpoint mapping.
 app.UseAuthentication();
 app.UseAuthorization();
 
 // ── Endpoints ───────────────────────────────────────────────────
 app.MapHealthChecks("/health").AllowAnonymous();
 
-// Feature endpoints will be mapped here in Steps 2.5 through 2.8.
-// Example pattern (do not write yet — placeholder comment only):
-// app.MapPost("/register", ...).AllowAnonymous();
-// app.MapGet("/me", ...).RequireAuthorization();
 app.MapRegisterEndpoint();
 app.MapGetMyProfileEndpoint();
 app.MapUpdateMyProfileEndpoint();
