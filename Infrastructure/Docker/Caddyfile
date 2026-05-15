@@ -9,9 +9,10 @@ cargo.northeurope.cloudapp.azure.com {
         reverse_proxy gateway:8080
     }
 
-    # 3. OpenAPI docs — proxied directly to customer-service
-    handle /docs {
-        reverse_proxy customer-service:8080/Scalar/V1
+    # 3. OpenAPI / Scalar docs — rewrite path then proxy to gateway
+    handle /docs* {
+        uri replace /docs /openapi
+        reverse_proxy gateway:8080
     }
 
     # 4. Health check — gateway health endpoint
