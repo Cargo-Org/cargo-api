@@ -1,19 +1,22 @@
 cargo.northeurope.cloudapp.azure.com {
-    # 1. Route for Keycloak
+    # 1. Keycloak — preserve /keycloak prefix (KC_HTTP_RELATIVE_PATH=/keycloak)
     handle /keycloak* {
         reverse_proxy keycloak:8080
     }
-    
-    # 2. Route for API Gateway
+
+    # 2. API routes — YARP gateway handles routing + JWT validation
     handle /api/* {
         reverse_proxy gateway:8080
     }
-    
-    # 3. Route for Main Address (Root /) Will be Docs
-    handle {
+
+    # 3. OpenAPI docs — proxied directly to customer-service
+    handle /openapi/* {
         reverse_proxy customer-service:8080
     }
+
+    # 4. Health check — gateway health endpoint
+    handle /health {
+        reverse_proxy gateway:8080
+    }
 }
-# 'handle' keeps the /keycloak prefix when sending the request to the container
-# 'handle_path' STRIPS the /api prefix before sending it to the container
-# (e.g., /api/users becomes just /users when it hits the gateway)
+# 'handle' keeps the matched path prefix when forwarding to the upstream
