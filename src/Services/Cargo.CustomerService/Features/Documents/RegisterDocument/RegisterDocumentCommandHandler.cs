@@ -1,4 +1,4 @@
-﻿using Cargo.BuildingBlocks.CQRS;
+using Cargo.BuildingBlocks.CQRS;
 using Cargo.CustomerService.Data;
 using Cargo.CustomerService.Domain.Entities;
 using ErrorOr;
@@ -7,14 +7,12 @@ using Microsoft.EntityFrameworkCore;
 namespace Cargo.CustomerService.Features.Documents.RegisterDocument;
 
 // Notice we use your custom ICommandHandler<TCommand, TResponse>
-public class RegisterDocumentCommandHandler(CustomerDbContext context) : ICommandHandler<RegisterDocumentCommand, Guid>
+public sealed class RegisterDocumentCommandHandler(CustomerDbContext dbContext) : ICommandHandler<RegisterDocumentCommand, Guid>
 {
-    private readonly CustomerDbContext _context = context;
-
     public async Task<ErrorOr<Guid>> Handle(RegisterDocumentCommand request, CancellationToken cancellationToken)
     {
         // 1. Eager load CustomerProfile along with its Documents collection
-        var profile = await _context.CustomerProfiles
+        var profile = await dbContext.CustomerProfiles
             .Include(p => p.Documents)
             .FirstOrDefaultAsync(p => p.KeycloakUserId == request.KeycloakUserId, cancellationToken);
 
@@ -45,13 +43,13 @@ public class RegisterDocumentCommandHandler(CustomerDbContext context) : IComman
             request.FileSizeBytes);
 
         // 4. Add to the Aggregate Root
-        _context.CustomerDocuments.Add(document);
+        dbContext.CustomerDocuments.Add(document);
 
         // 5. Trigger Domain Logic (Updates Profile status based on documents)
         profile.RecomputeOnboardingStatus();
 
         // 6. Persist to Database
-        await _context.SaveChangesAsync(cancellationToken);
+        await dbContext.SaveChangesAsync(cancellationToken);
 
         // Implicitly converts to ErrorOr<Guid> success state
         return document.Id;

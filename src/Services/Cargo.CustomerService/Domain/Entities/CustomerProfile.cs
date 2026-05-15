@@ -1,4 +1,5 @@
 ﻿using Cargo.CustomerService.Domain.Enums;
+using System.ComponentModel.DataAnnotations.Schema;
 
 namespace Cargo.CustomerService.Domain.Entities;
 
@@ -16,7 +17,14 @@ public sealed class CustomerProfile
     public string KeycloakUserId { get; private set; } = null!;
 
     // Nullable — Google login path creates profile before these are collected.
-    public string? FullName { get; private set; }
+    public string? FirstName { get; private set; }
+    public string? LastName { get; private set; }
+
+    [NotMapped]
+    public string? FullName => string.IsNullOrWhiteSpace(FirstName) && string.IsNullOrWhiteSpace(LastName)
+    ? null
+    : $"{FirstName} {LastName}".Trim();
+
     public string? PhoneNumber { get; private set; }
 
     // Denormalised from JWT at profile creation. Not used for auth.
@@ -45,7 +53,8 @@ public sealed class CustomerProfile
     public static CustomerProfile CreateForEmailRegistration(
         string keycloakUserId,
         string email,
-        string fullName,
+        string firstName,
+        string lastName,
         string phoneNumber)
     {
         return new CustomerProfile
@@ -53,7 +62,8 @@ public sealed class CustomerProfile
             Id = Guid.NewGuid(),
             KeycloakUserId = keycloakUserId,
             Email = email,
-            FullName = fullName,
+            FirstName = firstName,
+            LastName = lastName,
             PhoneNumber = phoneNumber,
             IsEmailVerified = false,
             OnboardingStatus = OnboardingStatus.MissingFiles,
@@ -83,9 +93,10 @@ public sealed class CustomerProfile
 
     // ── Domain methods ─────────────────────────────────────────────────────
 
-    public void UpdateProfile(string fullName, string phoneNumber)
+    public void UpdateProfile(string firstName, string lastName, string phoneNumber)
     {
-        FullName = fullName;
+        FirstName = firstName;
+        LastName = lastName;
         PhoneNumber = phoneNumber;
         UpdatedAt = DateTimeOffset.UtcNow;
         RecomputeOnboardingStatus();

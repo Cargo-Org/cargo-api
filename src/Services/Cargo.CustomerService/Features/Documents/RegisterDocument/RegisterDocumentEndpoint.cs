@@ -1,5 +1,4 @@
 ﻿using Cargo.BuildingBlocks.Extensions;
-using Cargo.CustomerService.Features.Auth.Register;
 using MediatR;
 
 namespace Cargo.CustomerService.Features.Documents.RegisterDocument

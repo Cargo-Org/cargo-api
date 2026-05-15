@@ -1,20 +1,27 @@
+using Cargo.BuildingBlocks;
 using Cargo.BuildingBlocks.Behaviours;
+using Cargo.BuildingBlocks.Extensions;
+using Cargo.BuildingBlocks.Security.Keycloak;
+using Cargo.BuildingBlocks.Storage.S3;
 using Cargo.CustomerService.Data;
 using Cargo.CustomerService.Features.Addresses;
+using Cargo.CustomerService.Features.Auth.ForgotPassword;
+using Cargo.CustomerService.Features.Auth.GoogleLogin;
+using Cargo.CustomerService.Features.Auth.Login;
+using Cargo.CustomerService.Features.Auth.Logout;
+using Cargo.CustomerService.Features.Auth.RefreshToken;
 using Cargo.CustomerService.Features.Auth.Register;
+using Cargo.CustomerService.Features.Auth.ResetPassword;
+using Cargo.CustomerService.Features.Auth.VerifyEmail;
 using Cargo.CustomerService.Features.Documents;
 using Cargo.CustomerService.Features.Profile.GetMyProfile;
 using Cargo.CustomerService.Features.Profile.UpdateMyProfile;
-using Cargo.CustomerService.Infrastructure.Keycloak;
-using Cargo.CustomerService.Infrastructure.Storage;
 using Cargo.Observability;
 using FluentValidation;
 using MediatR;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
-using Microsoft.OpenApi;
-using Scalar.AspNetCore;
 using System.Security.Claims;
 using System.Text.Json;
 
@@ -24,36 +31,7 @@ var builder = WebApplication.CreateBuilder(args);
 builder.AddCargoObservability("cargo-customer-service");
 
 // ── OpenAPI / Documentation ──────────────────────────────────────
-builder.Services.AddOpenApi(options =>
-{
-    // Set server URL to gateway URL + service prefix
-    // so Scalar "Try It" sends requests to the gateway, not the service directly
-    options.AddDocumentTransformer((document, context, ct) =>
-    {
-        var gatewayBaseUrl = builder.Configuration["Gateway:BaseUrl"]
-            ?? throw new InvalidOperationException("Gateway:BaseUrl is required.");
-
-        document.Info.Title = "Cargo — Customer Service";
-        document.Info.Version = "v1";
-        document.Servers = [new() { Url = $"{gatewayBaseUrl}/api/customers" }];
-
-        // Add JWT Bearer security scheme so Scalar shows the auth input
-        document.Components ??= new();
-        document.Components.SecuritySchemes = new Dictionary<string, IOpenApiSecurityScheme>
-        {
-            { "Bearer", new OpenApiSecurityScheme 
-                {
-                    Type = SecuritySchemeType.Http,
-                    Scheme = "bearer",
-                    BearerFormat = "JWT",
-                    Description = "Paste your access_token here. Get one from POST /api/auth/token"
-                } 
-            }
-        };
-
-        return Task.CompletedTask;
-    });
-});
+builder.Services.AddCargoOpenApi(title: "Cargo — Customer Service");
 
 // ── Authentication — JWT Bearer ──────────────────────────────────
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
@@ -130,26 +108,36 @@ builder.Services.AddDbContextPool<CustomerDbContext>(options =>
     }
 });
 
-// ── Storage Service ───────────────────────────────────────────────
-builder.Services.AddScoped<IStorageService, StorageService>();
+// ── Cargo Building Blocks Backing Services ────────────────────────
+builder.Services.AddKeycloakAdmin(builder.Configuration);
+builder.Services.AddOtpAndCache(builder.Configuration);
+builder.Services.AddEmailService(builder.Configuration);
+builder.Services.AddStorageService(builder.Configuration);
 
 // ── Health Check ─────────────────────────────────────────────────
 builder.Services.AddHealthChecks();
-
-// ── HTTP Client Factory ───────────────────────────────────────────
-builder.Services.AddHttpClient("keycloak-admin");
-
-// ── Infrastructure Services ───────────────────────────────────────
-builder.Services.AddSingleton<IKeycloakAdminClient, KeycloakAdminClient>();
 
 var app = builder.Build();
 
 // ── Automatic Migrations ─────────────────────────────────────────
 using (var scope = app.Services.CreateScope())
 {
-    var dbContext = scope.ServiceProvider.GetRequiredService<CustomerDbContext>();
-    // This will apply any pending migrations to the database on startup
-    dbContext.Database.Migrate();
+    var services = scope.ServiceProvider;
+    try
+    {
+        var context = services.GetRequiredService<CustomerDbContext>();
+
+        // This applies any pending migrations and creates the DB if it doesn't exist
+        await context.Database.MigrateAsync();
+    }
+    catch (Exception ex)
+    {
+        var logger = services.GetRequiredService<ILogger<Program>>();
+        logger.LogCritical(ex, "An error occurred while migrating the database.");
+
+        // Fail fast: If the DB isn't ready, the microservice shouldn't start
+        throw;
+    }
 }
 
 app.UseExceptionHandler(errorApp => errorApp.Run(async context =>
@@ -165,22 +153,30 @@ app.UseExceptionHandler(errorApp => errorApp.Run(async context =>
 }));
 
 // ── Documentation (Development only) ────────────────────────────
-if (app.Environment.IsDevelopment())
-{
-    app.MapOpenApi();
-}
+app.UseCargoOpenApi();
 
 // ── Middleware order — this is critical ──────────────────────────
 app.UseAuthentication();
 app.UseAuthorization();
 
 // ── Endpoints ───────────────────────────────────────────────────
+// Health Check
 app.MapHealthChecks("/health").AllowAnonymous();
-
+// Auth
 app.MapRegisterEndpoint();
+app.MapLoginEndpoint();
+app.MapRefreshTokenEndpoint();
+app.MapVerifyEmailEndpoint();
+app.MapGoogleLoginEndpoint();
+app.MapForgotPasswordEndpoint();
+app.MapResetPasswordEndpoint();
+app.MapLogoutEndpoint();
+// Profile
 app.MapGetMyProfileEndpoint();
 app.MapUpdateMyProfileEndpoint();
+// Addresses
 app.MapAddressEndpoints();
+// Documents
 app.MapDocumentEndpoints();
 
 app.Run();

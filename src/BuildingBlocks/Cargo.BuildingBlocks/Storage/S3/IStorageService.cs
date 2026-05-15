@@ -1,4 +1,4 @@
-﻿namespace Cargo.CustomerService.Infrastructure.Storage
+﻿namespace Cargo.BuildingBlocks.Storage.S3
 {
     public interface IStorageService
     {

@@ -28,7 +28,7 @@ public sealed class UpdateMyProfileCommandHandler(
         // UpdateProfile calls RecomputeOnboardingStatus internally.
         // OnboardingStatus transitions from MissingProfileData → MissingFiles
         // if both fields are now populated.
-        profile.UpdateProfile(command.FullName, command.PhoneNumber);
+        profile.UpdateProfile(command.FirstName, command.LastName, command.PhoneNumber);
 
         await dbContext.SaveChangesAsync(cancellationToken);
 

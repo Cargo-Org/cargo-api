@@ -1,4 +1,4 @@
-﻿using Cargo.CustomerService.Domain.Entities; 
+﻿using Cargo.CustomerService.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
@@ -25,8 +25,10 @@ public sealed class CustomerProfileConfiguration
             .IsRequired()
             .HasMaxLength(255);
 
-        builder.Property(p => p.FullName)
-            .HasMaxLength(255);
+        builder.Property(p => p.FirstName)
+            .HasMaxLength(128);
+        builder.Property(p => p.LastName)
+            .HasMaxLength(128);
 
         // E.164 max length is 15 digits + '+' = 16 characters.
         builder.Property(p => p.PhoneNumber)

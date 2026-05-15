@@ -1,12 +1,11 @@
 ﻿using Cargo.BuildingBlocks.CQRS;
+using Cargo.BuildingBlocks.Storage.S3;
 using Cargo.CustomerService.Data;
 using Cargo.CustomerService.Domain.Enums;
-using Cargo.CustomerService.Features.Documents.GetMyDocuments;
-using Cargo.CustomerService.Infrastructure.Storage;
 using ErrorOr;
 using Microsoft.EntityFrameworkCore;
 
-namespace Cargo.Features.Documents.GetMyDocuments;
+namespace Cargo.CustomerService.Features.Documents.GetMyDocuments;
 
 public class GetMyDocumentsQueryHandler(CustomerDbContext context, IStorageService storageService) : IQueryHandler<GetMyDocumentsQuery, List<DocumentResponse>>
 {

@@ -5,6 +5,7 @@ namespace Cargo.CustomerService.Features.Auth.Register;
 public sealed record RegisterCommand(
     string Email,
     string Password,
-    string FullName,
+    string FirstName,
+    string LastName,
     string PhoneNumber
 ) : ICommand<RegisterResponse>;

@@ -36,8 +36,11 @@ ScaffoldingReadMe.txt
 # NuGet Symbol Packages
 *.snupkg
 
-# dotenv environment variables file
+# dotenv environment variables file — never commit secrets
 .env
+.env.prod
+# Allow the example template (no secrets)
+!.env.production.example
 
 # Others
 ~$*
@@ -60,3 +63,5 @@ nunit-*.xml
 .vs/
 
 docker-compose.override.yml
+.agents
+skills-lock.json

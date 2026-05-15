@@ -7,8 +7,12 @@ public sealed class UpdateMyProfileCommandValidator
 {
     public UpdateMyProfileCommandValidator()
     {
-        RuleFor(x => x.FullName)
-            .NotEmpty().WithMessage("Full name is required.")
+        RuleFor(x => x.FirstName)
+            .NotEmpty().WithMessage("First name is required.")
+            .MaximumLength(255);
+
+        RuleFor(x => x.LastName)
+            .NotEmpty().WithMessage("Last name is required.")
             .MaximumLength(255);
 
         RuleFor(x => x.PhoneNumber)

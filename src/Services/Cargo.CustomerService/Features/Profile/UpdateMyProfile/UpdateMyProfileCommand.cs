@@ -4,6 +4,7 @@ namespace Cargo.CustomerService.Features.Profile.UpdateMyProfile;
 
 public sealed record UpdateMyProfileCommand(
     string KeycloakUserId,
-    string FullName,
+    string FirstName,
+    string LastName,
     string PhoneNumber
 ) : ICommand<ProfileResponse>;

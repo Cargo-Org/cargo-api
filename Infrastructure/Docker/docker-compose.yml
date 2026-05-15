@@ -12,56 +12,43 @@ services:
     restart: unless-stopped
     networks:
       - delivery-net
-    ports:
-      - "5432:5432"
     environment:
-      POSTGRES_USER: ${KC_DB_USERNAME}
-      POSTGRES_PASSWORD: ${KC_DB_PASSWORD}
+      POSTGRES_USER: ${DB_USERNAME}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
       POSTGRES_MULTIPLE_DATABASES: "keycloak_db,customer_db"
     volumes:
       - postgres_data:/var/lib/postgresql
-      - ./init-scripts:/docker-entrypoint-initdb.d
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${KC_DB_USERNAME} -d keycloak_db"]
+      test: [ "CMD-SHELL", "pg_isready -U ${DB_USERNAME} -d keycloak_db" ]
       interval: 5s
       timeout: 5s
       retries: 5
 
-  jaeger:
-    image: jaegertracing/all-in-one:1.55
-    container_name: dev_jaeger
+  redis:
+    image: redis:8.6.3-alpine
+    container_name: dev_redis
     restart: unless-stopped
     networks:
       - delivery-net
-    ports:
-      - "16686:16686" # UI
-      - "4317:4317"   # OTLP gRPC
-    environment:
-      COLLECTOR_OTLP_ENABLED: "true"
-
-  caddy:
-    image: caddy:2.11.2-alpine
-    container_name: caddy_proxy
-    restart: unless-stopped
-    networks:
-      - delivery-net
-    depends_on:
-      keycloak-waiter:
-        condition: service_started
-    ports:
-      - "80:80"
-      - "443:443"
+    command: >
+      redis-server
+        --requirepass ${REDIS_PASSWORD}
+        --maxmemory   256mb
+        --maxmemory-policy allkeys-lru
+        --appendonly  yes
     volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - caddy_data:/data   # Saves the SSL certificates so it doesn't request new ones on reboot
-      - caddy_config:/config
+      - redis_data:/data
+    healthcheck:
+      test: [ "CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   # =========================================
   # TIER 2: IDENTITY & ACCESS MANAGEMENT
   # =========================================
   keycloak:
     image: quay.io/keycloak/keycloak:26.6.0
-    container_name: keycloak
     restart: unless-stopped
     networks:
       - delivery-net
@@ -73,62 +60,34 @@ services:
       KC_BOOTSTRAP_ADMIN_PASSWORD: ${KC_BOOTSTRAP_ADMIN_PASSWORD}
       KC_DB: postgres
       KC_DB_URL: ${KC_DB_URL}
-      KC_DB_USERNAME: ${KC_DB_USERNAME}
-      KC_DB_PASSWORD: ${KC_DB_PASSWORD}
+      KC_DB_USERNAME: ${DB_USERNAME}
+      KC_DB_PASSWORD: ${DB_PASSWORD}
       KC_HOSTNAME: ${KC_HOSTNAME}
       KC_HOSTNAME_STRICT: "false"
       KC_HTTP_ENABLED: "true"
       KC_HEALTH_ENABLED: "true"
-      KC_PORT: 8080
-      KC_HOSTNAME_BACKCHANNEL_DYNAMIC: ${KC_HOSTNAME_BACKCHANNEL_DYNAMIC}
+      KC_HOSTNAME_BACKCHANNEL_DYNAMIC: "false"
       KC_HTTP_RELATIVE_PATH: /keycloak
       KC_PROXY_HEADERS: xforwarded
-    entrypoint: ["/bin/sh", "-c"]
+    entrypoint: [ "/bin/sh", "-c" ]
     command:
       - "/opt/keycloak/bin/kc.sh start --optimized || echo 'Optimized start failed! Falling back to standard start...' && /opt/keycloak/bin/kc.sh start"
 
   keycloak-waiter:
     image: curlimages/curl:8.20.0
-    container_name: dev_keycloak_waiter
     networks:
       - delivery-net
     depends_on:
       keycloak:
         condition: service_started
     restart: "no"
-    entrypoint: ["/bin/sh", "-c"]
+    entrypoint: [ "/bin/sh", "-c" ]
     command:
       - 'i=0; echo "Waiting for Keycloak..."; while ! curl -s -f http://keycloak:9000/keycloak/health/ready > /dev/null; do i=$$((i+1)); if [ $$i -ge 30 ]; then echo "ERROR: Keycloak timeout after 90 seconds"; exit 1; fi; echo "Attempt $$i/30 - retrying in 3s..."; sleep 3; done; echo "Keycloak is ready."'
 
   # =========================================
   # TIER 3: APPLICATION SERVICES
   # =========================================
-  gateway:
-    build:
-      context: ../../
-      dockerfile: src/Gateway/Cargo.Gateway/Dockerfile
-    container_name: cargo_gateway
-    restart: unless-stopped
-    networks:
-      - delivery-net
-    depends_on:
-      keycloak-waiter:
-        condition: service_completed_successfully
-      jaeger:
-        condition: service_started
-    environment:
-      ASPNETCORE_ENVIRONMENT: ${GW_ASPNETCORE_ENVIRONMENT}
-      OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4317
-      OTEL_EXPORTER_OTLP_PROTOCOL: grpc
-      # Reverse Proxy Overrides - Pointing to internal Docker DNS
-      ReverseProxy__Clusters__customer-cluster__Destinations__customer-service__Address: ${GW_Customer_Service_Address}
-      ReverseProxy__Clusters__keycloak-cluster__Destinations__keycloak-destination__Address: ${GW_Keycloak_Address}
-      Keycloak__Authority: ${CS_KC_Authority}
-      Keycloak__MetadataAddress: ${CS_KC_MetadataAddress}
-      Keycloak__Audience: ${CS_KC_Audience}
-    extra_hosts:
-      - "cargo.northeurope.cloudapp.azure.com:host-gateway"
-
   customer-service:
     build:
       context: ../../
@@ -140,32 +99,90 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-      jaeger:
-        condition: service_started
       keycloak-waiter:
         condition: service_completed_successfully
     environment:
       ASPNETCORE_ENVIRONMENT: ${CS_ASPNETCORE_ENVIRONMENT}
       ConnectionStrings__CustomerDb: ${CS_Connection_String}
-      OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4317
-      OTEL_EXPORTER_OTLP_PROTOCOL: grpc
       Gateway__BaseUrl: ${CS_GW_Url}
-      # Keycloak Security
       Keycloak__Authority: ${CS_KC_Authority}
       Keycloak__MetadataAddress: ${CS_KC_MetadataAddress}
       Keycloak__Audience: ${CS_KC_Audience}
       Keycloak_Backend__ClientId: ${CS_KC_Backend_ClientId}
       Keycloak_Backend__ClientSecret: ${CS_KC_Backend_ClientSecret}
-      # Cloudflare R2 Storage
+      Keycloak_Backend__BaseUrl: ${CS_KC_BaseUrl}
+      Keycloak_Backend__Realm: ${CS_KC_Realm}
       Storage__Endpoint: ${CS_CF_Storage_Endpoint}
       Storage__AccessKey: ${CS_CF_Storage_AccessKey}
       Storage__SecretKey: ${CS_CF_Storage_SecretKey}
       Storage__BucketName: ${CS_CF_Storage_BucketName}
       Storage__ForcePathStyle: ${CS_CF_Storage_ForcePathStyle}
-    extra_hosts:
-      - "cargo.northeurope.cloudapp.azure.com:host-gateway"
+      EmailSettings__SmtpHost: ${SMTP_HOST}
+      EmailSettings__SmtpPort: ${SMTP_PORT}
+      EmailSettings__From: ${SMTP_FROM}
+      EmailSettings__Password: ${SMTP_PASSWORD}
+      REDIS__ConnectionString: ${REDIS_CONNECTION_STRING}
 
 volumes:
   postgres_data:
-  caddy_data:
-  caddy_config:
+  redis_data:
+    # caddy_data:
+    # caddy_config:
+
+
+    # jaeger:
+    #   image: jaegertracing/all-in-one:1.55
+    #   container_name: dev_jaeger
+    #   restart: unless-stopped
+    #   networks:
+    #     - delivery-net
+    #   ports:
+    #     - "16686:16686"
+    #     - "4317:4317"
+    #   environment:
+    #     COLLECTOR_OTLP_ENABLED: "true"
+
+    # caddy:
+    #   image: caddy:2.11.2-alpine
+    #   container_name: caddy_proxy
+    #   restart: unless-stopped
+    #   networks:
+    #     - delivery-net
+    #   depends_on:
+    #     keycloak-waiter:
+    #       condition: service_started
+    #   ports:
+    #     - "80:80"
+    #     - "443:443"
+    #   volumes:
+    #     - ./Caddyfile:/etc/caddy/Caddyfile:ro
+    #     - caddy_data:/data
+    #     - caddy_config:/config
+
+
+
+
+    # gateway:
+    #   build:
+    #     context: ../../
+    #     dockerfile: src/Gateway/Cargo.Gateway/Dockerfile
+    #   container_name: cargo_gateway
+    #   restart: unless-stopped
+    #   networks:
+    #     - delivery-net
+    #   depends_on:
+    #     keycloak-waiter:
+    #       condition: service_completed_successfully
+    #     jaeger:
+    #       condition: service_started
+    #   environment:
+    #     ASPNETCORE_ENVIRONMENT: ${GW_ASPNETCORE_ENVIRONMENT}
+    #     OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4317
+    #     OTEL_EXPORTER_OTLP_PROTOCOL: grpc
+    #     ReverseProxy__Clusters__customer-cluster__Destinations__customer-service__Address: ${GW_Customer_Service_Address}
+    #     ReverseProxy__Clusters__keycloak-cluster__Destinations__keycloak-destination__Address: ${GW_Keycloak_Address}
+    #     Keycloak__Authority: ${CS_KC_Authority}
+    #     Keycloak__MetadataAddress: ${CS_KC_MetadataAddress}
+    #     Keycloak__Audience: ${CS_KC_Audience}
+    #   extra_hosts:
+    #     - "cargo.northeurope.cloudapp.azure.com:host-gateway"

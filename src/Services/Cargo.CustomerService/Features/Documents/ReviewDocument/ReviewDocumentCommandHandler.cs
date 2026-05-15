@@ -1,4 +1,4 @@
-﻿using Cargo.BuildingBlocks.CQRS;
+using Cargo.BuildingBlocks.CQRS;
 using Cargo.CustomerService.Data;
 using Cargo.CustomerService.Domain.Enums;
 using ErrorOr;
@@ -7,14 +7,13 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Cargo.CustomerService.Features.Documents.ReviewDocument;
 
-public class ReviewDocumentCommandHandler(CustomerDbContext context) : ICommandHandler<ReviewDocumentCommand>
+public sealed class ReviewDocumentCommandHandler(CustomerDbContext dbContext) : ICommandHandler<ReviewDocumentCommand>
 {
-    private readonly CustomerDbContext _context = context;
 
     public async Task<ErrorOr<Unit>> Handle(ReviewDocumentCommand request, CancellationToken cancellationToken)
     {
         // 1. Eager load the document, its parent profile, AND the sibling documents collection
-        var document = await _context.CustomerDocuments
+        var document = await dbContext.CustomerDocuments
             .Include(d => d.Customer)
                 .ThenInclude(p => p.Documents)
             .FirstOrDefaultAsync(d => d.Id == request.DocumentId, cancellationToken);
@@ -34,7 +33,7 @@ public class ReviewDocumentCommandHandler(CustomerDbContext context) : ICommandH
         }
 
         // 2. Apply the review updates
-        if (request.Status == DocumentReviewStatus.Rejected && !string.IsNullOrWhiteSpace(request.ReviewNote)) 
+        if (request.Status == DocumentReviewStatus.Rejected && !string.IsNullOrWhiteSpace(request.ReviewNote))
         {
             document.Reject(request.ReviewerKeycloakId, request.ReviewNote);
         }
@@ -54,7 +53,7 @@ public class ReviewDocumentCommandHandler(CustomerDbContext context) : ICommandH
         document.Customer.RecomputeOnboardingStatus();
 
         // 4. Save Changes
-        await _context.SaveChangesAsync(cancellationToken);
+        await dbContext.SaveChangesAsync(cancellationToken);
 
         return Unit.Value; // Implicitly converts to a successful ErrorOr<Unit>
     }

@@ -13,9 +13,14 @@
 	</ItemGroup>
 
 	<ItemGroup>
+		<PackageReference Include="AWSSDK.S3" Version="4.0.23" />
+		<PackageReference Include="MailKit" Version="4.16.0" />
 		<PackageReference Include="MediatR" Version="12.*" />
 		<PackageReference Include="ErrorOr" Version="2.*" />
 		<PackageReference Include="FluentValidation" Version="11.*" />
+		<PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.7" />
+		<PackageReference Include="Microsoft.Extensions.Caching.StackExchangeRedis" Version="10.0.7" />
+		<PackageReference Include="Scalar.AspNetCore" Version="2.14.11" />
 	</ItemGroup>
 
 </Project>

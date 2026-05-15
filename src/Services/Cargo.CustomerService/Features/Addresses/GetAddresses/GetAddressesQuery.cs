@@ -1,5 +1,4 @@
 ﻿using Cargo.BuildingBlocks.CQRS;
-using Cargo.CustomerService.Features.Addresses;
 
 namespace Cargo.CustomerService.Features.Addresses.GetAddresses;
 

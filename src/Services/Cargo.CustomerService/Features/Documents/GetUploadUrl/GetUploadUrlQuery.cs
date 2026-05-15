@@ -1,5 +1,5 @@
-﻿using Cargo.CustomerService.Domain.Enums;
-using Cargo.BuildingBlocks.CQRS;
+﻿using Cargo.BuildingBlocks.CQRS;
+using Cargo.CustomerService.Domain.Enums;
 
 namespace Cargo.CustomerService.Features.Documents.GetUploadUrl;
 

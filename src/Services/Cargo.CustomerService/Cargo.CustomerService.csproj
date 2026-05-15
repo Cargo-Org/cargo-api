@@ -40,7 +40,6 @@
 		<PackageReference Include="FluentValidation.DependencyInjectionExtensions" Version="11.*" />
 
 		<!-- AWS SDK S3 — talks to MinIO using the S3-compatible API -->
-		<PackageReference Include="AWSSDK.S3" Version="3.*" />
 	</ItemGroup>
 
 

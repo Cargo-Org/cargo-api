@@ -1,8 +1,10 @@
 ﻿using Cargo.BuildingBlocks.CQRS;
-using Cargo.CustomerService.Common.Exceptions;
+using Cargo.BuildingBlocks.Exceptions;
+using Cargo.BuildingBlocks.Notifications.Email;
+using Cargo.BuildingBlocks.Security.Keycloak;
+using Cargo.BuildingBlocks.Utils.OTP;
 using Cargo.CustomerService.Data;
 using Cargo.CustomerService.Domain.Entities;
-using Cargo.CustomerService.Infrastructure.Keycloak;
 using ErrorOr;
 using Microsoft.EntityFrameworkCore;
 
@@ -11,6 +13,8 @@ namespace Cargo.CustomerService.Features.Auth.Register;
 public sealed class RegisterCommandHandler(
     CustomerDbContext dbContext,
     IKeycloakAdminClient keycloakAdminClient,
+    IOtpService otpService,
+    IEmailService emailService,
     ILogger<RegisterCommandHandler> logger)
     : ICommandHandler<RegisterCommand, RegisterResponse>
 {
@@ -18,8 +22,7 @@ public sealed class RegisterCommandHandler(
         RegisterCommand command,
         CancellationToken cancellationToken)
     {
-        // ── Step 1: Duplicate check in our database ───────────────────────
-        // Check our DB first — faster than a Keycloak round-trip.
+        // ── Step 1: Duplicate check ──────────────────────────────────────
         var emailExists = await dbContext.CustomerProfiles
             .AnyAsync(p => p.Email == command.Email, cancellationToken);
 
@@ -28,20 +31,19 @@ public sealed class RegisterCommandHandler(
                 code: "Registration.EmailAlreadyExists",
                 description: "An account with this email address already exists.");
 
-        // ── Step 2: Create user in Keycloak ───────────────────────────────
+        // ── Step 2: Create user in Keycloak ─────────────────────────────
         string keycloakUserId;
         try
         {
             keycloakUserId = await keycloakAdminClient.CreateUserAsync(
                 command.Email,
                 command.Password,
-                command.FullName,
+                command.FirstName,
+                command.LastName,
                 cancellationToken);
         }
         catch (ConflictException)
         {
-            // User exists in Keycloak but not in our DB.
-            // Could be a previous failed registration. Treat as conflict.
             return Error.Conflict(
                 code: "Registration.EmailAlreadyExists",
                 description: "An account with this email address already exists.");
@@ -55,7 +57,7 @@ public sealed class RegisterCommandHandler(
                 description: "Failed to create user account. Please try again.");
         }
 
-        // ── Step 3: Assign customer role ──────────────────────────────────
+        // ── Step 3: Assign customer role ─────────────────────────────────
         try
         {
             await keycloakAdminClient.AssignRealmRoleAsync(
@@ -64,21 +66,19 @@ public sealed class RegisterCommandHandler(
         catch (Exception ex)
         {
             logger.LogError(ex,
-                "Failed to assign role to Keycloak user {UserId}. Starting compensating delete.",
-                keycloakUserId);
-
+                "Failed to assign role to {UserId}. Compensating.", keycloakUserId);
             await TryDeleteKeycloakUserAsync(keycloakUserId, cancellationToken);
-
             return Error.Failure(
                 code: "Registration.RoleAssignmentFailed",
                 description: "Failed to configure user account. Please try again.");
         }
 
-        // ── Step 4: Create CustomerProfile ────────────────────────────────
+        // ── Step 4: Persist local profile ───────────────────────────────
         var profile = CustomerProfile.CreateForEmailRegistration(
             keycloakUserId,
             command.Email,
-            command.FullName,
+            command.FirstName,
+            command.LastName,
             command.PhoneNumber);
 
         dbContext.CustomerProfiles.Add(profile);
@@ -90,29 +90,35 @@ public sealed class RegisterCommandHandler(
         catch (Exception ex)
         {
             logger.LogError(ex,
-                "Failed to save CustomerProfile for Keycloak user {UserId}. Starting compensating delete.",
+                "Failed to save CustomerProfile for {UserId}. Compensating.",
                 keycloakUserId);
-
             await TryDeleteKeycloakUserAsync(keycloakUserId, cancellationToken);
-
             return Error.Failure(
                 code: "Registration.DatabaseError",
                 description: "Failed to complete registration. Please try again.");
         }
 
-        // ── Step 5: Send verification email ───────────────────────────────
-        // Non-critical: profile is already saved. If this fails, the user is
-        // registered and can request a new verification email later.
+        // ── Step 5: Send verification OTP ───────────────────────────────
+        // ✅ FIXED: GenerateAsync stores the SHA-256 hash in Redis internally.
+        //    Do NOT call cache.SetAsync here — that would store the plain-text
+        //    OTP in a separate Redis key, leaking it in any cache dump.
         try
         {
-            await keycloakAdminClient.SendVerificationEmailAsync(
-                keycloakUserId, cancellationToken);
+            var otp = await otpService.GenerateAsync(
+                command.Email, OtpPurpose.EmailVerification, cancellationToken);
+
+            await emailService.SendOtpAsync(
+                command.Email,
+                $"{command.FirstName} {command.LastName}",
+                otp,
+                OtpEmailType.EmailVerification,
+                cancellationToken);
         }
         catch (Exception ex)
         {
+            // Non-critical: profile is saved. User can request re-send.
             logger.LogWarning(ex,
-                "Failed to send verification email to {Email}. " +
-                "Registration succeeded — user must request a new verification email.",
+                "Verification email failed for {Email} — profile still created.",
                 command.Email);
         }
 
@@ -123,26 +129,22 @@ public sealed class RegisterCommandHandler(
         return new RegisterResponse(profile.Id);
     }
 
-    // ── Compensating transaction ───────────────────────────────────────────
+    // ── Compensating transaction ─────────────────────────────────────────
     private async Task TryDeleteKeycloakUserAsync(
-        string keycloakUserId,
-        CancellationToken ct)
+        string keycloakUserId, CancellationToken ct)
     {
         try
         {
             await keycloakAdminClient.DeleteUserAsync(keycloakUserId, ct);
             logger.LogInformation(
-                "Compensating transaction succeeded: deleted Keycloak user {UserId}",
+                "Compensating delete succeeded for Keycloak user {UserId}",
                 keycloakUserId);
         }
         catch (Exception ex)
         {
-            // This is now a manual consistency issue.
-            // The user exists in Keycloak with no profile in customer_db.
-            // Phase 3 Outbox Pattern eliminates this risk entirely.
             logger.LogCritical(ex,
                 "CONSISTENCY ALERT: Keycloak user {UserId} exists but compensating " +
-                "delete failed. Manual cleanup required. Check Keycloak admin console.",
+                "delete failed. Manual cleanup required.",
                 keycloakUserId);
         }
     }

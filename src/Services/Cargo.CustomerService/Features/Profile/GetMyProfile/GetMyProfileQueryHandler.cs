@@ -1,4 +1,4 @@
-﻿using Cargo.BuildingBlocks.CQRS;
+using Cargo.BuildingBlocks.CQRS;
 using Cargo.CustomerService.Data;
 using Cargo.CustomerService.Domain.Entities;
 using Cargo.CustomerService.Domain.Enums;
@@ -16,7 +16,10 @@ public sealed class GetMyProfileQueryHandler(
         GetMyProfileQuery query,
         CancellationToken cancellationToken)
     {
-        // ── Step 1: Load or auto-create the profile ───────────────────────
+        // ── Step 1: Load the profile ──────────────────────────────────────
+        // Profile creation is handled by POST /register (email/password path)
+        // or EnsureSocialProfileCommand (social login path, dispatched by the
+        // endpoint before this query). This handler is read-only (CQS).
         var profile = await dbContext.CustomerProfiles
             .Include(p => p.Documents)
             .FirstOrDefaultAsync(
@@ -25,32 +28,9 @@ public sealed class GetMyProfileQueryHandler(
 
         if (profile is null)
         {
-            // Auto-create path — Google login user calling GET /me for the first time.
-            // Email/password users are created in POST /register, never here.
-            logger.LogInformation(
-                "Auto-creating CustomerProfile for social login user {KeycloakUserId}",
-                query.KeycloakUserId);
-
-            profile = CustomerProfile.CreateForSocialLogin(
-                query.KeycloakUserId,
-                query.Email);
-
-            dbContext.CustomerProfiles.Add(profile);
-
-            try
-            {
-                await dbContext.SaveChangesAsync(cancellationToken);
-            }
-            catch (Exception ex)
-            {
-                logger.LogError(ex,
-                    "Failed to auto-create CustomerProfile for {KeycloakUserId}",
-                    query.KeycloakUserId);
-
-                return Error.Failure(
-                    code: "Profile.AutoCreateFailed",
-                    description: "Failed to initialise user profile. Please try again.");
-            }
+            return Error.NotFound(
+                code: "Profile.NotFound",
+                description: "Customer profile not found.");
         }
 
         // ── Step 2: Sync email_verified from JWT ──────────────────────────

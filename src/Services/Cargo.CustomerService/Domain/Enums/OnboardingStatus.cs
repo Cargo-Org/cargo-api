@@ -9,7 +9,7 @@ public enum OnboardingStatus
     // Profile data complete but required documents not yet uploaded,
     // or a previously submitted document was rejected by an admin.
     MissingFiles = 1,
-     
+
     // All required documents uploaded and awaiting admin review.
     PendingReview = 2,
 

@@ -1,4 +1,5 @@
-﻿using Cargo.BuildingBlocks.Extensions;
+using Cargo.BuildingBlocks.Extensions;
+using Cargo.CustomerService.Features.Profile.EnsureSocialProfile;
 using MediatR;
 using System.Security.Claims;
 
@@ -30,6 +31,14 @@ public static class GetMyProfileEndpoint
                 user.FindFirstValue("email_verified"),
                 "true",
                 StringComparison.OrdinalIgnoreCase);
+
+            // Ensure profile exists for social-login users (idempotent).
+            // For email/password users the profile already exists — this is a no-op.
+            var ensureResult = await sender.Send(
+                new EnsureSocialProfileCommand(keycloakUserId, email), ct);
+
+            if (ensureResult.IsError)
+                return ensureResult.Errors.ToProblemResult();
 
             var query = new GetMyProfileQuery(keycloakUserId, email, emailVerified);
             var result = await sender.Send(query, ct);

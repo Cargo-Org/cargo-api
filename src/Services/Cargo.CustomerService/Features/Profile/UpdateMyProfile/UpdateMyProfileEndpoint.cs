@@ -7,7 +7,8 @@ namespace Cargo.CustomerService.Features.Profile.UpdateMyProfile;
 // The request body contains only the fields the client can submit.
 // KeycloakUserId is extracted from the JWT — never from the request body.
 public sealed record UpdateMyProfileRequest(
-    string FullName,
+    string FirstName,
+    string LastName,
     string PhoneNumber);
 
 public static class UpdateMyProfileEndpoint
@@ -27,7 +28,8 @@ public static class UpdateMyProfileEndpoint
 
             var command = new UpdateMyProfileCommand(
                 keycloakUserId,
-                request.FullName,
+                request.FirstName,
+                request.LastName,
                 request.PhoneNumber);
 
             var result = await sender.Send(command, ct);

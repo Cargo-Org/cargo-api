@@ -1,25 +1,27 @@
-﻿using Amazon.S3;
+using Amazon.S3;
 using Amazon.S3.Model;
+using Microsoft.Extensions.Options;
 
-namespace Cargo.CustomerService.Infrastructure.Storage;
+namespace Cargo.BuildingBlocks.Storage.S3;
 
 public class StorageService : IStorageService
 {
     private readonly IAmazonS3 _s3Client;
     private readonly string _bucketName;
 
-    public StorageService(IConfiguration configuration)
+    public StorageService(IOptions<StorageSettings> options)
     {
-        var endpoint = configuration["Storage:Endpoint"] ?? throw new ArgumentNullException("Storage:Endpoint missing");
-        var accessKey = configuration["Storage:AccessKey"] ?? throw new ArgumentNullException("Storage:AccessKey missing");
-        var secretKey = configuration["Storage:SecretKey"] ?? throw new ArgumentNullException("Storage:SecretKey missing");
-        var forcePathStyle = configuration["Storage:ForcePathStyle"] ?? throw new ArgumentNullException("Storage:ForcePathStyle missing");
-        _bucketName = configuration["Storage:BucketName"] ?? throw new ArgumentNullException("Storage:BucketName missing");
+        var settings = options.Value ?? throw new ArgumentNullException(nameof(options));
+
+        var endpoint = string.IsNullOrWhiteSpace(settings.Endpoint) ? throw new ArgumentNullException("StorageSettings:Endpoint missing") : settings.Endpoint;
+        var accessKey = string.IsNullOrWhiteSpace(settings.AccessKey) ? throw new ArgumentNullException("StorageSettings:AccessKey missing") : settings.AccessKey;
+        var secretKey = string.IsNullOrWhiteSpace(settings.SecretKey) ? throw new ArgumentNullException("StorageSettings:SecretKey missing") : settings.SecretKey;
+        _bucketName = string.IsNullOrWhiteSpace(settings.BucketName) ? throw new ArgumentNullException("StorageSettings:BucketName missing") : settings.BucketName;
 
         var config = new AmazonS3Config
         {
             ServiceURL = endpoint,
-            ForcePathStyle = bool.Parse(forcePathStyle)
+            ForcePathStyle = settings.ForcePathStyle
         };
 
         _s3Client = new AmazonS3Client(accessKey, secretKey, config);

@@ -1,5 +1,4 @@
 ﻿using Cargo.BuildingBlocks.CQRS;
-using Cargo.CustomerService.Features.Profile;
 
 namespace Cargo.CustomerService.Features.Profile.GetMyProfile;
 
