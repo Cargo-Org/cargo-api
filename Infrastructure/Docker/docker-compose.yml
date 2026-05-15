@@ -83,7 +83,7 @@ services:
     restart: "no"
     entrypoint: [ "/bin/sh", "-c" ]
     command:
-      - 'i=0; echo "Waiting for Keycloak..."; while ! curl -s -f http://keycloak:9000/keycloak/health/ready > /dev/null; do i=$$((i+1)); if [ $$i -ge 20 ]; then echo "ERROR: Keycloak timeout after 200 seconds"; exit 1; fi; echo "Attempt $$i/20 - retrying in 10s..."; sleep 10; done; echo "Keycloak is ready."
+      - 'i=0; echo "Waiting for Keycloak..."; while ! curl -s -f http://keycloak:9000/keycloak/health/ready > /dev/null; do i=$$((i+1)); if [ $$i -ge 20 ]; then echo "ERROR: Keycloak timeout after 200 seconds"; exit 1; fi; echo "Attempt $$i/20 - retrying in 10s..."; sleep 10; done; echo "Keycloak is ready."'
 
   # =========================================
   # TIER 3: APPLICATION SERVICES
