@@ -19,4 +19,4 @@ cargo.northeurope.cloudapp.azure.com {
         reverse_proxy gateway:8080
     }
 }
-# 'handle' keeps the matched path prefix when forwarding to the upstream 
+# 'handle' keeps the matched path prefix when forwarding to the upstream
