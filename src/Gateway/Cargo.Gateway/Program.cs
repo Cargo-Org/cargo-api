@@ -1,7 +1,7 @@
 using Cargo.Observability;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.IdentityModel.Tokens;
-using Scalar.AspNetCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -37,7 +37,15 @@ builder.Services
         };
     });
 
-builder.Services.AddAuthorization();
+builder.Services.AddAuthorization(options =>
+{
+    // "default" policy — referenced by API routes in appsettings.json.
+    // Requires a valid, authenticated JWT issued by Keycloak.
+    // Doc routes use AuthorizationPolicy: "anonymous" and bypass this entirely.
+    options.DefaultPolicy = new AuthorizationPolicyBuilder()
+        .RequireAuthenticatedUser()
+        .Build();
+});
 
 // YARP
 builder.Services
@@ -46,7 +54,16 @@ builder.Services
 
 var app = builder.Build();
 
-// Health check — anonymous
+// ── Convenience redirects ─────────────────────────────────────────────────────
+// Scalar's HTML page lives at /scalar/{documentName} on each service, so the
+// gateway exposes it at /docs/{service}/v1.  These redirects let developers
+// type /docs/customer and land on the right page without knowing the v1 suffix.
+app.MapGet("/docs/{service}", (string service) =>
+        Results.Redirect($"/docs/{service}/v1", permanent: false))
+    .AllowAnonymous();
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Health check — always anonymous, bypasses JWT
 app.MapGet("/health", () => Results.Ok(new { status = "healthy" }))
     .AllowAnonymous();
 

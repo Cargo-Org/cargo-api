@@ -1,6 +1,5 @@
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
 using Microsoft.OpenApi;
 using Scalar.AspNetCore;
 
@@ -8,7 +7,7 @@ namespace Cargo.BuildingBlocks.Extensions;
 
 public static class OpenApiExtensions
 {
-    public static IServiceCollection AddCargoOpenApi(this IServiceCollection services, string title, string version = "v1")
+    public static IServiceCollection AddCargoOpenApi(this IServiceCollection services, string title, string servicePrefix, string version = "v1")
     {
         services.AddOpenApi(options =>
         {
@@ -17,6 +16,13 @@ public static class OpenApiExtensions
                 document.Info ??= new OpenApiInfo();
                 document.Info.Title = title;
                 document.Info.Version = version;
+
+                // Point Scalar's "Try It" feature at the public gateway path
+                // so the browser doesn't try to reach the internal container URL.
+                document.Servers =
+                [
+                    new OpenApiServer { Url = $"/api/{servicePrefix}" }
+                ];
 
                 var bearerScheme = new OpenApiSecurityScheme
                 {
@@ -36,10 +42,10 @@ public static class OpenApiExtensions
             options.AddOperationTransformer((operation, context, ct) =>
             {
                 var metadata = context.Description.ActionDescriptor.EndpointMetadata;
-                var hasAuthorize = metadata?.OfType<Microsoft.AspNetCore.Authorization.IAuthorizeData>().Any() == true;
-                var hasAllowAnonymous = metadata?.OfType<Microsoft.AspNetCore.Authorization.IAllowAnonymous>().Any() == true;
+                var hasAuthorize  = metadata?.OfType<Microsoft.AspNetCore.Authorization.IAuthorizeData>().Any() == true;
+                var hasAnonymous  = metadata?.OfType<Microsoft.AspNetCore.Authorization.IAllowAnonymous>().Any() == true;
 
-                if (hasAuthorize && !hasAllowAnonymous)
+                if (hasAuthorize && !hasAnonymous)
                 {
                     operation.Security ??= [];
                     operation.Security.Add(new()
@@ -55,13 +61,30 @@ public static class OpenApiExtensions
         return services;
     }
 
-    public static WebApplication UseCargoOpenApi(this WebApplication app)
+    /// <summary>
+    /// Maps /openapi/v1.json and the Scalar UI for this service.
+    /// The UI is configured to fetch its OpenAPI spec via the gateway at
+    /// /docs/{servicePrefix}/openapi/v1.json so it works correctly when
+    /// accessed through the YARP reverse proxy.
+    /// </summary>
+    /// <param name="app">The web application.</param>
+    /// <param name="servicePrefix">
+    /// The gateway path segment for this service, e.g. "customer" or "driver".
+    /// Must match the prefix used in the gateway's appsettings.json routes.
+    /// </param>
+    public static WebApplication UseCargoOpenApi(this WebApplication app, string servicePrefix)
     {
-        if (app.Environment.IsDevelopment())
+        // Serves the raw OpenAPI document at /openapi/v1.json (internal path,
+        // proxied by the gateway from /docs/{servicePrefix}/openapi/v1.json).
+        app.MapOpenApi();
+
+        // The UI lives at /scalar/v1 on the service (proxied from /docs/{servicePrefix}).
+        // WithOpenApiRoutePattern points Scalar's JS fetch to the gateway-level path
+        // so the browser resolves it correctly regardless of how the page was accessed.
+        app.MapScalarApiReference(options =>
         {
-            app.MapOpenApi();
-            app.MapScalarApiReference();
-        }
+            options.WithOpenApiRoutePattern($"/docs/{servicePrefix}/openapi/v1.json");
+        });
 
         return app;
     }

@@ -50,6 +50,7 @@ services:
   # =========================================
   keycloak:
     image: quay.io/keycloak/keycloak:26.6.0
+    container_name: dev_keycloak
     restart: unless-stopped
     networks:
       - delivery-net
@@ -76,6 +77,7 @@ services:
 
   keycloak-waiter:
     image: curlimages/curl:8.20.0
+    container_name: dev_keycloak_waiter
     networks:
       - delivery-net
     depends_on:
@@ -93,7 +95,7 @@ services:
     build:
       context: ../../
       dockerfile: src/Services/Cargo.CustomerService/Dockerfile
-    container_name: customer-service
+    container_name: cargo_customer
     restart: unless-stopped
     networks:
       - delivery-net

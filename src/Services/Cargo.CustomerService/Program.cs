@@ -31,7 +31,7 @@ var builder = WebApplication.CreateBuilder(args);
 builder.AddCargoObservability("cargo-customer-service");
 
 // ── OpenAPI / Documentation ──────────────────────────────────────
-builder.Services.AddCargoOpenApi(title: "Cargo — Customer Service");
+builder.Services.AddCargoOpenApi(title: "Cargo — Customer Service", servicePrefix: "customer");
 
 // ── Authentication — JWT Bearer ──────────────────────────────────
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
@@ -153,7 +153,7 @@ app.UseExceptionHandler(errorApp => errorApp.Run(async context =>
 }));
 
 // ── Documentation (Development only) ────────────────────────────
-app.UseCargoOpenApi();
+app.UseCargoOpenApi("customer");
 
 // ── Middleware order — this is critical ──────────────────────────
 app.UseAuthentication();

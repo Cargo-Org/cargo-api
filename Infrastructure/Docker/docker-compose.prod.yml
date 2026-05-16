@@ -13,9 +13,9 @@ services:
   # =========================================
   # APPLICATION SERVICES (Prod)
   # =========================================
-  customer-service:
-    environment:
-      ASPNETCORE_ENVIRONMENT: Production
+  # customer-service:
+  #   environment:
+  #     ASPNETCORE_ENVIRONMENT: Production
 
   # =========================================
   # REVERSE PROXY — Caddy (Prod only)
@@ -31,6 +31,8 @@ services:
     depends_on:
       keycloak-waiter:
         condition: service_completed_successfully
+    # environment:
+    #   - CADDY_HOST=localhost
     ports:
       - "80:80"
       - "443:443"

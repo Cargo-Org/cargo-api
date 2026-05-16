@@ -1,23 +1,52 @@
-cargo.northeurope.cloudapp.azure.com {
+# ─────────────────────────────────────────────────────────────────────────────
+# Caddyfile
+#
+# Production (Azure VM):  CADDY_HOST is not set → defaults to the Azure domain.
+#                         Caddy automatically obtains a Let's Encrypt TLS cert.
+#                         Requires ports 80 + 443 open in the Azure NSG.
+#
+# Local dev:              Set CADDY_HOST=localhost before starting Caddy.
+#                         Caddy uses its own local CA and issues a self-signed cert.
+#                         Run `caddy trust` once so your browser accepts it.
+#
+# Usage:
+#   Azure VM  →  caddy run --config Caddyfile
+#   Local dev →  CADDY_HOST=localhost caddy run --config Caddyfile
+# ─────────────────────────────────────────────────────────────────────────────
+
+{$CADDY_HOST:cargo.northeurope.cloudapp.azure.com} {
+
     # 1. Keycloak — preserve /keycloak prefix (KC_HTTP_RELATIVE_PATH=/keycloak)
     handle /keycloak* {
         reverse_proxy keycloak:8080
     }
 
-    # 2. API routes — YARP gateway handles routing + JWT validation
+    # 2. API routes — YARP gateway handles JWT validation + service routing
     handle /api/* {
         reverse_proxy gateway:8080
     }
 
-    # 3. OpenAPI / Scalar docs — rewrite path then proxy to gateway
-    handle /docs* {
-        uri replace /docs /openapi
+    # 3. Scalar docs — proxied through gateway to each service's Scalar UI.
+    #    Gateway routes: /docs/customer/** and /docs/driver/**
+    #    These are marked AuthorizationPolicy: "anonymous" in YARP so no JWT needed.
+    #
+    #    TIP: In production, restrict doc access to internal IPs or a VPN range:
+    #
+    #      @internal remote_ip 10.0.0.0/8 172.16.0.0/12 192.168.0.0/16
+    #      handle /docs/* {
+    #          @notInternal not remote_ip 10.0.0.0/8 172.16.0.0/12 192.168.0.0/16
+    #          respond @notInternal 403
+    #          reverse_proxy gateway:8080
+    #      }
+    handle /docs/* {
         reverse_proxy gateway:8080
     }
 
-    # 4. Health check — gateway health endpoint
+    # 4. Health check — gateway liveness probe
     handle /health {
         reverse_proxy gateway:8080
     }
 }
-# 'handle' keeps the matched path prefix when forwarding to the upstream
+
+# 'handle'      keeps the matched path prefix when forwarding upstream
+# 'handle_path' strips the matched path prefix when forwarding upstream
