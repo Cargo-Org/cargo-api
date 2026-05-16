@@ -31,8 +31,8 @@ services:
     depends_on:
       keycloak-waiter:
         condition: service_completed_successfully
-    environment:
-      - CADDY_HOST=localhost
+    # environment:
+    #   - CADDY_HOST=localhost
     ports:
       - "80:80"
       - "443:443"
