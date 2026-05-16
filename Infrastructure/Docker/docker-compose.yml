@@ -15,7 +15,7 @@ services:
     environment:
       POSTGRES_USER: ${DB_USERNAME}
       POSTGRES_PASSWORD: ${DB_PASSWORD}
-      POSTGRES_MULTIPLE_DATABASES: "keycloak_db,customer_db"
+      POSTGRES_MULTIPLE_DATABASES: "keycloak_db,customer_db,driver_db"
     volumes:
       - postgres_data:/var/lib/postgresql
       - ./init-scripts:/docker-entrypoint-initdb.d
@@ -126,6 +126,41 @@ services:
       EmailSettings__Password: ${SMTP_PASSWORD}
       REDIS__ConnectionString: ${REDIS_CONNECTION_STRING}
 
+  driver-service:
+    build:
+      context: ../../
+      dockerfile: src/Services/Cargo.DriverService/Dockerfile
+    container_name: cargo_driver
+    restart: unless-stopped
+    networks:
+      - delivery-net
+    depends_on:
+      postgres:
+        condition: service_healthy
+      keycloak-waiter:
+        condition: service_completed_successfully
+    environment:
+      ASPNETCORE_ENVIRONMENT: ${DS_ASPNETCORE_ENVIRONMENT}
+      ConnectionStrings__DriverDb: ${DS_Connection_String}
+      Gateway__BaseUrl: ${DS_GW_Url}
+      Keycloak__Authority: ${DS_KC_Authority}
+      Keycloak__MetadataAddress: ${DS_KC_MetadataAddress}
+      Keycloak__Audience: ${DS_KC_Audience}
+      Keycloak_Backend__ClientId: ${DS_KC_Backend_ClientId}
+      Keycloak_Backend__ClientSecret: ${DS_KC_Backend_ClientSecret}
+      Keycloak_Backend__BaseUrl: ${DS_KC_BaseUrl}
+      Keycloak_Backend__Realm: ${DS_KC_Realm}
+      Storage__Endpoint: ${DS_CF_Storage_Endpoint}
+      Storage__AccessKey: ${DS_CF_Storage_AccessKey}
+      Storage__SecretKey: ${DS_CF_Storage_SecretKey}
+      Storage__BucketName: ${DS_CF_Storage_BucketName}
+      Storage__ForcePathStyle: ${DS_CF_Storage_ForcePathStyle}
+      EmailSettings__SmtpHost: ${SMTP_HOST}
+      EmailSettings__SmtpPort: ${SMTP_PORT}
+      EmailSettings__From: ${SMTP_FROM}
+      EmailSettings__Password: ${SMTP_PASSWORD}
+      REDIS__ConnectionString: ${REDIS_CONNECTION_STRING}
+
   # =========================================
   # TIER 4: API GATEWAY (YARP)
   # =========================================
@@ -141,6 +176,8 @@ services:
       keycloak-waiter:
         condition: service_completed_successfully
       customer-service:
+        condition: service_started
+      driver-service:
         condition: service_started
     environment:
       ASPNETCORE_ENVIRONMENT: ${GW_ASPNETCORE_ENVIRONMENT}

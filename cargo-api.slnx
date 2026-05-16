@@ -9,4 +9,5 @@
   <Project Path="src/BuildingBlocks/Cargo.Observability/Cargo.Observability.csproj" />
   <Project Path="src/Gateway/Cargo.Gateway/Cargo.Gateway.csproj" />
   <Project Path="src/Services/Cargo.CustomerService/Cargo.CustomerService.csproj" />
+  <Project Path="src/Services/Cargo.DriverService/Cargo.DriverService.csproj" />
 </Solution>
