@@ -29,11 +29,17 @@ jobs:
             echo "==> Navigating to Docker directory..."
             cd Infrastructure/Docker
 
-            echo "==> Building and restarting services..."
+            echo "==> Stopping all running containers..."
             docker compose \
               -f docker-compose.yml \
               -f docker-compose.prod.yml \
-              up -d --build --remove-orphans
+              down --remove-orphans
+
+            echo "==> Building and starting services..."
+            docker compose \
+              -f docker-compose.yml \
+              -f docker-compose.prod.yml \
+              up -d --build
 
             echo "==> Pruning unused images to free disk space..."
             docker image prune -f
