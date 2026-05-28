@@ -34,6 +34,26 @@ public sealed class DriverProfileConfiguration
         builder.Property(p => p.PhoneNumber)
             .HasMaxLength(16);
 
+        builder.Property(p => p.DriverSsn)
+            .HasMaxLength(20);
+
+        builder.Property(p => p.CurrentVehicleNumber)
+            .HasMaxLength(50);
+
+        builder.Property(p => p.WalletBalance)
+            .HasPrecision(18, 2)
+            .HasDefaultValue(0.00m);
+
+        builder.Property(p => p.Rating)
+            .HasPrecision(3, 1)
+            .HasDefaultValue(0.0m);
+
+        // Store enum as string — readable in SQL and safe against reordering.
+        builder.Property(p => p.DriverStatus)
+            .HasConversion<string>()
+            .HasMaxLength(50)
+            .HasDefaultValue(Domain.Enums.DriverStatus.Suspended);
+
         // Store enum as string in the database — readable in SQL queries
         // and safe against reordering.
         builder.Property(p => p.OnboardingStatus)
