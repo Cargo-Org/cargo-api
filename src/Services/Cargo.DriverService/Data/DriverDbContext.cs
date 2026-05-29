@@ -8,6 +8,7 @@ public sealed class DriverDbContext(DbContextOptions<DriverDbContext> options)
 {
     public DbSet<DriverProfile> DriverProfiles => Set<DriverProfile>();
     public DbSet<DriverDocument> DriverDocuments => Set<DriverDocument>();
+    public DbSet<Vehicle> Vehicles => Set<Vehicle>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

@@ -57,6 +57,10 @@ public sealed class DriverProfile
     public IReadOnlyList<DriverDocument> Documents { get; private set; }
         = new List<DriverDocument>();
 
+    // Navigation property — one driver owns many vehicles.
+    public IReadOnlyList<Vehicle> Vehicles { get; private set; }
+        = new List<Vehicle>();
+
     // ── Factory method — email/password registration path ─────────────────
     // OnboardingStatus starts at MissingFiles because profile data is already
     // collected at registration (fullName and phoneNumber are required fields).
@@ -122,6 +126,17 @@ public sealed class DriverProfile
     {
         if (IsEmailVerified == isVerified) return; // No-op if unchanged
         IsEmailVerified = isVerified;
+        UpdatedAt = DateTimeOffset.UtcNow;
+    }
+
+    /// <summary>
+    /// Sets CurrentVehicleNumber only if no vehicle is currently assigned.
+    /// Called when the driver registers their first vehicle.
+    /// </summary>
+    public void SetCurrentVehicleIfEmpty(string vehicleNumber)
+    {
+        if (!string.IsNullOrWhiteSpace(CurrentVehicleNumber)) return;
+        CurrentVehicleNumber = vehicleNumber;
         UpdatedAt = DateTimeOffset.UtcNow;
     }
 

@@ -13,6 +13,7 @@ using Cargo.DriverService.Features.Auth.Register;
 using Cargo.DriverService.Features.Auth.ResetPassword;
 using Cargo.DriverService.Features.Auth.VerifyEmail;
 using Cargo.DriverService.Features.Documents;
+using Cargo.DriverService.Features.Vehicles;
 using Cargo.DriverService.Features.Profile.GetMyProfile;
 using Cargo.DriverService.Features.Profile.UpdateMyProfile;
 using Cargo.Observability;
@@ -175,5 +176,7 @@ app.MapGetMyProfileEndpoint();
 app.MapUpdateMyProfileEndpoint();
 // Documents
 app.MapDocumentEndpoints();
+// Vehicles
+app.MapVehicleEndpoints();
 
 app.Run();
