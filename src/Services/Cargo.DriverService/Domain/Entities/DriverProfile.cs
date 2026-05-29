@@ -33,6 +33,19 @@ public sealed class DriverProfile
     // Starts false. Set to true when GET /me detects email_verified=true in JWT.
     public bool IsEmailVerified { get; private set; }
 
+    // Nullable — not available at initial registration.
+    public string? DriverSsn { get; private set; }
+
+    // Nullable — assigned when a vehicle is linked to this driver.
+    public string? CurrentVehicleNumber { get; private set; }
+
+    public decimal WalletBalance { get; private set; }
+
+    public decimal Rating { get; private set; }
+
+    // New drivers start as Suspended until onboarding is complete.
+    public DriverStatus DriverStatus { get; private set; } = DriverStatus.Suspended;
+
     // Never set by client. Always computed by RecomputeOnboardingStatus().
     public OnboardingStatus OnboardingStatus { get; private set; }
 
@@ -43,6 +56,10 @@ public sealed class DriverProfile
     // Private set prevents external code from replacing the collection.
     public IReadOnlyList<DriverDocument> Documents { get; private set; }
         = new List<DriverDocument>();
+
+    // Navigation property — one driver owns many vehicles.
+    public IReadOnlyList<Vehicle> Vehicles { get; private set; }
+        = new List<Vehicle>();
 
     // ── Factory method — email/password registration path ─────────────────
     // OnboardingStatus starts at MissingFiles because profile data is already
@@ -63,6 +80,9 @@ public sealed class DriverProfile
             LastName = lastName,
             PhoneNumber = phoneNumber,
             IsEmailVerified = false,
+            WalletBalance = 0.00m,
+            Rating = 0.0m,
+            DriverStatus = DriverStatus.Suspended,
             OnboardingStatus = OnboardingStatus.MissingFiles,
             CreatedAt = DateTimeOffset.UtcNow,
             UpdatedAt = DateTimeOffset.UtcNow
@@ -82,6 +102,9 @@ public sealed class DriverProfile
             KeycloakUserId = keycloakUserId,
             Email = email,
             IsEmailVerified = true, // Google-authenticated users are already verified
+            WalletBalance = 0.00m,
+            Rating = 0.0m,
+            DriverStatus = DriverStatus.Suspended,
             OnboardingStatus = OnboardingStatus.MissingProfileData,
             CreatedAt = DateTimeOffset.UtcNow,
             UpdatedAt = DateTimeOffset.UtcNow
@@ -103,6 +126,17 @@ public sealed class DriverProfile
     {
         if (IsEmailVerified == isVerified) return; // No-op if unchanged
         IsEmailVerified = isVerified;
+        UpdatedAt = DateTimeOffset.UtcNow;
+    }
+
+    /// <summary>
+    /// Sets CurrentVehicleNumber only if no vehicle is currently assigned.
+    /// Called when the driver registers their first vehicle.
+    /// </summary>
+    public void SetCurrentVehicleIfEmpty(string vehicleNumber)
+    {
+        if (!string.IsNullOrWhiteSpace(CurrentVehicleNumber)) return;
+        CurrentVehicleNumber = vehicleNumber;
         UpdatedAt = DateTimeOffset.UtcNow;
     }
 
