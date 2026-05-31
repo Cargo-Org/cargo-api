@@ -13,6 +13,6 @@ public sealed class VerifyEmailCommandValidator : AbstractValidator<VerifyEmailC
 
         RuleFor(x => x.OtpCode)
             .NotEmpty().WithMessage("OTP code is required.")
-            .Length(6).WithMessage("OTP code must be 6 characters long.");
+            .Length(5).WithMessage("OTP code must be 5 characters long.");
     }
 }
