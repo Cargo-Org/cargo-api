@@ -164,7 +164,9 @@ public sealed class DriverProfile
             DriverDocumentType.DrivingLicenseFront,
             DriverDocumentType.DrivingLicenseBack,
             DriverDocumentType.DrugTestCertificate,
-            DriverDocumentType.CriminalRecord
+            DriverDocumentType.CriminalRecord,
+            DriverDocumentType.NationalIdFront,
+            DriverDocumentType.NationalIdBack
         };
 
         bool allRequiredPresent = hasRequiredDocTypes.All(requiredType =>

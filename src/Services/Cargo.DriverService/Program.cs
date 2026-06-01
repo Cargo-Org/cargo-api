@@ -7,6 +7,7 @@ using Cargo.DriverService.Data;
 using Cargo.DriverService.Features.Auth.ForgotPassword;
 using Cargo.DriverService.Features.Auth.GoogleLogin;
 using Cargo.DriverService.Features.Auth.Login;
+using Cargo.DriverService.Features.Auth.DeleteAccount;
 using Cargo.DriverService.Features.Auth.Logout;
 using Cargo.DriverService.Features.Auth.RefreshToken;
 using Cargo.DriverService.Features.Auth.Register;
@@ -171,6 +172,7 @@ app.MapGoogleLoginEndpoint();
 app.MapForgotPasswordEndpoint();
 app.MapResetPasswordEndpoint();
 app.MapLogoutEndpoint();
+app.MapDeleteAccountEndpoint();
 // Profile
 app.MapGetMyProfileEndpoint();
 app.MapUpdateMyProfileEndpoint();

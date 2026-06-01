@@ -8,6 +8,7 @@ using Cargo.CustomerService.Features.Addresses;
 using Cargo.CustomerService.Features.Auth.ForgotPassword;
 using Cargo.CustomerService.Features.Auth.GoogleLogin;
 using Cargo.CustomerService.Features.Auth.Login;
+using Cargo.CustomerService.Features.Auth.DeleteAccount;
 using Cargo.CustomerService.Features.Auth.Logout;
 using Cargo.CustomerService.Features.Auth.RefreshToken;
 using Cargo.CustomerService.Features.Auth.Register;
@@ -171,6 +172,7 @@ app.MapGoogleLoginEndpoint();
 app.MapForgotPasswordEndpoint();
 app.MapResetPasswordEndpoint();
 app.MapLogoutEndpoint();
+app.MapDeleteAccountEndpoint();
 // Profile
 app.MapGetMyProfileEndpoint();
 app.MapUpdateMyProfileEndpoint();

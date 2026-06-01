@@ -181,9 +181,12 @@ services:
         condition: service_started
     environment:
       ASPNETCORE_ENVIRONMENT: ${GW_ASPNETCORE_ENVIRONMENT}
-      Keycloak__Authority: ${CS_KC_Authority}
-      Keycloak__MetadataAddress: ${CS_KC_MetadataAddress}
-      Keycloak__Audience: ${CS_KC_Audience}
+      KeycloakCustomer__Authority: ${CS_KC_Authority}
+      KeycloakCustomer__MetadataAddress: ${CS_KC_MetadataAddress}
+      KeycloakCustomer__Audience: ${CS_KC_Audience}
+      KeycloakDriver__Authority: ${DS_KC_Authority}
+      KeycloakDriver__MetadataAddress: ${DS_KC_MetadataAddress}
+      KeycloakDriver__Audience: ${DS_KC_Audience}
       ReverseProxy__Clusters__customer-cluster__Destinations__customer-service__Address: ${GW_Customer_Service_Address}
 
 volumes:

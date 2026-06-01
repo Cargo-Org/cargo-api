@@ -44,9 +44,9 @@ public class OtpService(
         string identifier, string purpose, CancellationToken ct = default)
     {
         // 1. Generate a cryptographically-random N-digit code
-        int ceiling = (int)Math.Pow(10, _settings.CodeLength); // 1_000_000 for 6 digits
+        int ceiling = (int)Math.Pow(10, _settings.CodeLength); // 100_000 for 5 digits
         int raw = RandomNumberGenerator.GetInt32(0, ceiling);
-        string code = raw.ToString($"D{_settings.CodeLength}");  // zero-padded: "007341"
+        string code = raw.ToString($"D{_settings.CodeLength}");  // zero-padded: "00734"
 
         // 2. Hash the plain-text code before storing
         string hash = HashCode(code);
