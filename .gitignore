@@ -65,3 +65,4 @@ nunit-*.xml
 docker-compose.override.yml
 .agents
 skills-lock.json
+/Infrastructure/Keycloak/cargo-realm.json
