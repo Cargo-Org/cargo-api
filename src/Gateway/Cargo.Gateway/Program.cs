@@ -8,41 +8,77 @@ var builder = WebApplication.CreateBuilder(args);
 // Observability (Traces, Metrics, Logs via OTLP)
 builder.AddCargoObservability("cargo-gateway");
 
-// Configuration values
-var keycloakAuthority = builder.Configuration["Keycloak:Authority"]
-    ?? throw new InvalidOperationException("Keycloak:Authority must be configured");
-var keycloakMetadataAddress = builder.Configuration["Keycloak:MetadataAddress"]
-    ?? throw new InvalidOperationException("Keycloak:MetadataAddress must be configured");
-var keycloakAudience = builder.Configuration["Keycloak:Audience"]
-    ?? throw new InvalidOperationException("Keycloak:Audience must be configured");
+// Configuration values — Customer Realm
+var customerAuthority = builder.Configuration["KeycloakCustomer:Authority"]
+    ?? throw new InvalidOperationException("KeycloakCustomer:Authority must be configured");
+var customerMetadata = builder.Configuration["KeycloakCustomer:MetadataAddress"]
+    ?? throw new InvalidOperationException("KeycloakCustomer:MetadataAddress must be configured");
+var customerAudience = builder.Configuration["KeycloakCustomer:Audience"]
+    ?? throw new InvalidOperationException("KeycloakCustomer:Audience must be configured");
 
-// JWT Bearer authentication
+// Configuration values — Driver Realm
+var driverAuthority = builder.Configuration["KeycloakDriver:Authority"]
+    ?? throw new InvalidOperationException("KeycloakDriver:Authority must be configured");
+var driverMetadata = builder.Configuration["KeycloakDriver:MetadataAddress"]
+    ?? throw new InvalidOperationException("KeycloakDriver:MetadataAddress must be configured");
+var driverAudience = builder.Configuration["KeycloakDriver:Audience"]
+    ?? throw new InvalidOperationException("KeycloakDriver:Audience must be configured");
+
+// JWT Bearer authentication — two schemes, one per realm
 builder.Services
-    .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-    .AddJwtBearer(options =>
+    .AddAuthentication("MultiRealm")
+    .AddJwtBearer("CustomerBearer", options =>
     {
-        options.Authority = keycloakAuthority;
-        options.MetadataAddress = keycloakMetadataAddress;
+        options.Authority = customerAuthority;
+        options.MetadataAddress = customerMetadata;
         options.MapInboundClaims = false;
         options.RequireHttpsMetadata = false;
         options.TokenValidationParameters = new TokenValidationParameters
         {
             ValidateIssuer = true,
-            ValidIssuer = keycloakAuthority,
+            ValidIssuer = customerAuthority,
             ValidateAudience = true,
-            ValidAudience = keycloakAudience,
+            ValidAudience = customerAudience,
             ValidateLifetime = true,
             ValidateIssuerSigningKey = true,
             ClockSkew = TimeSpan.FromSeconds(30)
+        };
+    })
+    .AddJwtBearer("DriverBearer", options =>
+    {
+        options.Authority = driverAuthority;
+        options.MetadataAddress = driverMetadata;
+        options.MapInboundClaims = false;
+        options.RequireHttpsMetadata = false;
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidIssuer = driverAuthority,
+            ValidateAudience = true,
+            ValidAudience = driverAudience,
+            ValidateLifetime = true,
+            ValidateIssuerSigningKey = true,
+            ClockSkew = TimeSpan.FromSeconds(30)
+        };
+    })
+    .AddPolicyScheme("MultiRealm", "Multi-Realm Keycloak", options =>
+    {
+        // Route to the correct JWT scheme based on request path
+        options.ForwardDefaultSelector = context =>
+        {
+            var path = context.Request.Path.Value ?? "";
+            if (path.StartsWith("/api/driver", StringComparison.OrdinalIgnoreCase))
+                return "DriverBearer";
+            return "CustomerBearer";
         };
     });
 
 builder.Services.AddAuthorization(options =>
 {
     // "default" policy — referenced by API routes in appsettings.json.
-    // Requires a valid, authenticated JWT issued by Keycloak.
+    // Requires a valid, authenticated JWT issued by either Keycloak realm.
     // Doc routes use AuthorizationPolicy: "anonymous" and bypass this entirely.
-    options.DefaultPolicy = new AuthorizationPolicyBuilder()
+    options.DefaultPolicy = new AuthorizationPolicyBuilder("CustomerBearer", "DriverBearer")
         .RequireAuthenticatedUser()
         .Build();
 });
