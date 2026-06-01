@@ -3,6 +3,7 @@ using System;
 using Cargo.DriverService.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Cargo.DriverService.Data.Migrations
 {
     [DbContext(typeof(DriverDbContext))]
-    partial class DriverDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260528201904_AddMissingDriverFields")]
+    partial class AddMissingDriverFields
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -160,89 +163,6 @@ namespace Cargo.DriverService.Data.Migrations
                     b.ToTable("DriverProfiles", (string)null);
                 });
 
-            modelBuilder.Entity("Cargo.DriverService.Domain.Entities.Vehicle", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTimeOffset>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid>("DriverId")
-                        .HasColumnType("uuid");
-
-                    b.Property<bool>("IsLicenseVerified")
-                        .HasColumnType("boolean");
-
-                    b.Property<string>("LicenseContentType")
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
-
-                    b.Property<string>("LicenseObjectKey")
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
-
-                    b.Property<string>("LicenseOriginalFileName")
-                        .HasMaxLength(255)
-                        .HasColumnType("character varying(255)");
-
-                    b.Property<string>("LicensePlate")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)");
-
-                    b.Property<string>("LicenseReviewNote")
-                        .HasMaxLength(1000)
-                        .HasColumnType("character varying(1000)");
-
-                    b.Property<string>("LicenseReviewStatus")
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)");
-
-                    b.Property<DateTimeOffset?>("LicenseReviewedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("LicenseReviewedByKeycloakId")
-                        .HasMaxLength(255)
-                        .HasColumnType("character varying(255)");
-
-                    b.Property<DateTimeOffset?>("LicenseUploadedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<int>("ManufactureYear")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("VehicleColor")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)");
-
-                    b.Property<string>("VehicleModel")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
-
-                    b.Property<string>("VehicleNumber")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)");
-
-                    b.Property<string>("VehicleType")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("DriverId");
-
-                    b.HasIndex("VehicleNumber")
-                        .IsUnique();
-
-                    b.ToTable("Vehicles", (string)null);
-                });
-
             modelBuilder.Entity("Cargo.DriverService.Domain.Entities.DriverDocument", b =>
                 {
                     b.HasOne("Cargo.DriverService.Domain.Entities.DriverProfile", "Driver")
@@ -254,22 +174,9 @@ namespace Cargo.DriverService.Data.Migrations
                     b.Navigation("Driver");
                 });
 
-            modelBuilder.Entity("Cargo.DriverService.Domain.Entities.Vehicle", b =>
-                {
-                    b.HasOne("Cargo.DriverService.Domain.Entities.DriverProfile", "Driver")
-                        .WithMany("Vehicles")
-                        .HasForeignKey("DriverId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Driver");
-                });
-
             modelBuilder.Entity("Cargo.DriverService.Domain.Entities.DriverProfile", b =>
                 {
                     b.Navigation("Documents");
-
-                    b.Navigation("Vehicles");
                 });
 #pragma warning restore 612, 618
         }

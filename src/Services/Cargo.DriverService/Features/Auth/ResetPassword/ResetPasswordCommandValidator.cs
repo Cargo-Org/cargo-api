@@ -13,7 +13,7 @@ public sealed class ResetPasswordCommandValidator
 
         RuleFor(x => x.OtpCode)
             .NotEmpty().WithMessage("Reset code is required.")
-            .Length(6).WithMessage("Reset code must be 6 characters.");
+            .Length(5).WithMessage("Reset code must be 5 characters.");
 
         RuleFor(x => x.NewPassword)
             .NotEmpty().WithMessage("New password is required.")

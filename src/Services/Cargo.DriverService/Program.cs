@@ -7,12 +7,14 @@ using Cargo.DriverService.Data;
 using Cargo.DriverService.Features.Auth.ForgotPassword;
 using Cargo.DriverService.Features.Auth.GoogleLogin;
 using Cargo.DriverService.Features.Auth.Login;
+using Cargo.DriverService.Features.Auth.DeleteAccount;
 using Cargo.DriverService.Features.Auth.Logout;
 using Cargo.DriverService.Features.Auth.RefreshToken;
 using Cargo.DriverService.Features.Auth.Register;
 using Cargo.DriverService.Features.Auth.ResetPassword;
 using Cargo.DriverService.Features.Auth.VerifyEmail;
 using Cargo.DriverService.Features.Documents;
+using Cargo.DriverService.Features.Vehicles;
 using Cargo.DriverService.Features.Profile.GetMyProfile;
 using Cargo.DriverService.Features.Profile.UpdateMyProfile;
 using Cargo.Observability;
@@ -170,10 +172,13 @@ app.MapGoogleLoginEndpoint();
 app.MapForgotPasswordEndpoint();
 app.MapResetPasswordEndpoint();
 app.MapLogoutEndpoint();
+app.MapDeleteAccountEndpoint();
 // Profile
 app.MapGetMyProfileEndpoint();
 app.MapUpdateMyProfileEndpoint();
 // Documents
 app.MapDocumentEndpoints();
+// Vehicles
+app.MapVehicleEndpoints();
 
 app.Run();
