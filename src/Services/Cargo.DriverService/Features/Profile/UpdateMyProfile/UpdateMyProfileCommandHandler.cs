@@ -4,10 +4,16 @@ using Cargo.DriverService.Domain.Enums;
 using ErrorOr;
 using Microsoft.EntityFrameworkCore;
 
+using Cargo.BuildingBlocks.Messaging;
+using Cargo.BuildingBlocks.Utils.OTP;
+
 namespace Cargo.DriverService.Features.Profile.UpdateMyProfile;
 
 public sealed class UpdateMyProfileCommandHandler(
-    DriverDbContext dbContext)
+    DriverDbContext dbContext,
+    IOtpService otpService,
+    INotificationPublisher notificationPublisher,
+    ILogger<UpdateMyProfileCommandHandler> logger)
     : ICommandHandler<UpdateMyProfileCommand, ProfileResponse>
 {
     public async Task<ErrorOr<ProfileResponse>> Handle(
@@ -29,6 +35,25 @@ public sealed class UpdateMyProfileCommandHandler(
         profile.UpdateProfile(command.FirstName, command.LastName, command.PhoneNumber);
 
         await dbContext.SaveChangesAsync(cancellationToken);
+
+        if (!profile.IsPhoneVerified && !string.IsNullOrWhiteSpace(profile.PhoneNumber))
+        {
+            try
+            {
+                var otp = await otpService.GenerateAsync(
+                    profile.PhoneNumber, OtpPurpose.PhoneVerification, cancellationToken);
+
+                await notificationPublisher.PublishAsync(
+                    NotificationMessage.WhatsApp(
+                        profile.PhoneNumber,
+                        $"Your Cargo verification code is {otp}. Do not share this code with anyone."),
+                    cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Failed to send phone verification OTP for {PhoneNumber}", profile.PhoneNumber);
+            }
+        }
 
         var hasRejectedDocuments = profile.Documents
             .Any(d => d.ReviewStatus == DocumentReviewStatus.Rejected);

@@ -101,14 +101,12 @@ public sealed class RegisterCommandHandler(
 
         // ── Step 5: Enqueue verification OTP via outbox ─────────────────
         var otp = await otpService.GenerateAsync(
-            command.Email, OtpPurpose.EmailVerification, cancellationToken);
+            command.PhoneNumber, OtpPurpose.PhoneVerification, cancellationToken);
 
         await notificationPublisher.PublishAsync(
-            NotificationMessage.EmailOtp(
-                command.Email,
-                $"{command.FirstName} {command.LastName}",
-                otp,
-                OtpEmailType.EmailVerification),
+            NotificationMessage.WhatsApp(
+                command.PhoneNumber,
+                $"Your Cargo verification code is {otp}. Do not share this code with anyone."),
             cancellationToken);
 
         logger.LogInformation(

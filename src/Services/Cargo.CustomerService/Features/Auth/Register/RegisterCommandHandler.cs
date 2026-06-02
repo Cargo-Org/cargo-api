@@ -104,14 +104,12 @@ public sealed class RegisterCommandHandler(
         // The OutboxPublisherWorker forwards the message to RabbitMQ in the
         // background, so this call never blocks the HTTP response on SMTP.
         var otp = await otpService.GenerateAsync(
-            command.Email, OtpPurpose.EmailVerification, cancellationToken);
+            command.PhoneNumber, OtpPurpose.PhoneVerification, cancellationToken);
 
         await notificationPublisher.PublishAsync(
-            NotificationMessage.EmailOtp(
-                command.Email,
-                $"{command.FirstName} {command.LastName}",
-                otp,
-                OtpEmailType.EmailVerification),
+            NotificationMessage.WhatsApp(
+                command.PhoneNumber,
+                $"Your Cargo verification code is {otp}. Do not share this code with anyone."),
             cancellationToken);
 
         logger.LogInformation(

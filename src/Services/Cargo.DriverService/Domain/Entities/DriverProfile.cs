@@ -33,6 +33,8 @@ public sealed class DriverProfile
     // Starts false. Set to true when GET /me detects email_verified=true in JWT.
     public bool IsEmailVerified { get; private set; }
 
+    public bool IsPhoneVerified { get; private set; }
+
     // Nullable — not available at initial registration.
     public string? DriverSsn { get; private set; }
 
@@ -80,6 +82,7 @@ public sealed class DriverProfile
             LastName = lastName,
             PhoneNumber = phoneNumber,
             IsEmailVerified = false,
+            IsPhoneVerified = false,
             WalletBalance = 0.00m,
             Rating = 0.0m,
             DriverStatus = DriverStatus.Suspended,
@@ -102,6 +105,7 @@ public sealed class DriverProfile
             KeycloakUserId = keycloakUserId,
             Email = email,
             IsEmailVerified = true, // Google-authenticated users are already verified
+            IsPhoneVerified = false, // Phone is not collected yet
             WalletBalance = 0.00m,
             Rating = 0.0m,
             DriverStatus = DriverStatus.Suspended,
@@ -117,7 +121,13 @@ public sealed class DriverProfile
     {
         FirstName = firstName;
         LastName = lastName;
-        PhoneNumber = phoneNumber;
+        
+        if (PhoneNumber != phoneNumber)
+        {
+            PhoneNumber = phoneNumber;
+            IsPhoneVerified = false;
+        }
+
         UpdatedAt = DateTimeOffset.UtcNow;
         RecomputeOnboardingStatus();
     }
@@ -126,6 +136,13 @@ public sealed class DriverProfile
     {
         if (IsEmailVerified == isVerified) return; // No-op if unchanged
         IsEmailVerified = isVerified;
+        UpdatedAt = DateTimeOffset.UtcNow;
+    }
+
+    public void SyncPhoneVerified(bool isVerified)
+    {
+        if (IsPhoneVerified == isVerified) return; // No-op if unchanged
+        IsPhoneVerified = isVerified;
         UpdatedAt = DateTimeOffset.UtcNow;
     }
 

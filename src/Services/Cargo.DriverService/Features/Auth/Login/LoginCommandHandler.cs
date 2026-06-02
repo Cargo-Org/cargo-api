@@ -40,19 +40,6 @@ public sealed class LoginCommandHandler(
                 code: "Login.InvalidCredentials",
                 description: "Invalid email or password.");
         }
-        catch (EmailNotVerifiedException)
-        {
-            logger.LogWarning(
-                "Login blocked for {Email} — Keycloak reports email not verified. Resending OTP.",
-                command.Email);
-
-            await ResendVerificationOtpAsync(command.Email, cancellationToken);
-
-            return Error.Unauthorized(
-                code: "Login.EmailNotVerified",
-                description: "Your email address has not been verified. " +
-                             "A new verification code has been sent to your inbox.");
-        }
         catch (Exception ex)
         {
             logger.LogError(ex,
@@ -62,22 +49,7 @@ public sealed class LoginCommandHandler(
                 description: "Authentication failed. Please try again.");
         }
 
-        // ── Step 2: Check email_verified claim inside the JWT ───────────
-        if (!IsEmailVerified(userTokenResponse.AccessToken))
-        {
-            logger.LogWarning(
-                "Login blocked for {Email} — email not verified. Resending OTP.",
-                command.Email);
-
-            await ResendVerificationOtpAsync(command.Email, cancellationToken);
-
-            return Error.Unauthorized(
-                code: "Login.EmailNotVerified",
-                description: "Your email address has not been verified. " +
-                             "A new verification code has been sent to your inbox.");
-        }
-
-        // ── Step 3: Load local profile ──────────────────────────────────
+        // ── Step 2: Load local profile ──────────────────────────────────
         var driver = await dbContext.DriverProfiles
             .AsNoTracking()
             .FirstOrDefaultAsync(c => c.Email == command.Email, cancellationToken);
@@ -93,6 +65,24 @@ public sealed class LoginCommandHandler(
                 description: "User profile not found.");
         }
 
+        // ── Step 3: Check Phone Verification ────────────────────────────
+        if (!driver.IsPhoneVerified)
+        {
+            logger.LogWarning(
+                "Login blocked for {Email} — phone not verified. Resending OTP.",
+                command.Email);
+
+            if (!string.IsNullOrWhiteSpace(driver.PhoneNumber))
+            {
+                await ResendPhoneVerificationOtpAsync(driver.PhoneNumber, cancellationToken);
+            }
+
+            return Error.Unauthorized(
+                code: "Login.PhoneNotVerified",
+                description: "Your phone number has not been verified. " +
+                             "A new verification code has been sent to your WhatsApp.");
+        }
+
         // ── Step 4: Return tokens ───────────────────────────────────────
         return new LoginResponse(
             AccessToken: userTokenResponse.AccessToken,
@@ -106,48 +96,25 @@ public sealed class LoginCommandHandler(
 
     // ── Helpers ─────────────────────────────────────────────────────────
 
-    private static bool IsEmailVerified(string accessToken)
+    private async Task ResendPhoneVerificationOtpAsync(
+        string phoneNumber, CancellationToken ct)
     {
         try
         {
-            var jwt = _jwtHandler.ReadJwtToken(accessToken);
-            var claim = jwt.Claims.FirstOrDefault(c => c.Type == "email_verified");
-
-            return claim is not null &&
-                   bool.TryParse(claim.Value, out bool verified) &&
-                   verified;
-        }
-        catch
-        {
-            return false;
-        }
-    }
-
-    private async Task ResendVerificationOtpAsync(
-        string email, CancellationToken ct)
-    {
-        try
-        {
-            var driver = await dbContext.DriverProfiles
-                .AsNoTracking()
-                .Where(c => c.Email == email)
-                .Select(c => c.FullName)
-                .FirstOrDefaultAsync(ct);
-
-            var displayName = string.IsNullOrWhiteSpace(driver) ? "there" : driver;
-
             var otp = await otpService.GenerateAsync(
-                email, OtpPurpose.EmailVerification, ct);
+                phoneNumber, OtpPurpose.PhoneVerification, ct);
 
             await notificationPublisher.PublishAsync(
-                NotificationMessage.EmailOtp(
-                    email, displayName, otp, OtpEmailType.EmailVerification),
+                NotificationMessage.WhatsApp(
+                    phoneNumber,
+                    $"Your Cargo verification code is {otp}. Do not share this code with anyone."),
                 ct);
         }
         catch (Exception ex)
         {
+            // Non-critical path — log but don't fail the login response.
             logger.LogError(ex,
-                "Failed to resend verification OTP for {Email}", email);
+                "Failed to resend verification OTP for {PhoneNumber}", phoneNumber);
         }
     }
 }

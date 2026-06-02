@@ -4,11 +4,15 @@ using Cargo.BuildingBlocks.Utils.OTP;
 using ErrorOr;
 using MediatR;
 
+using Cargo.DriverService.Data;
+using Microsoft.EntityFrameworkCore;
+
 namespace Cargo.DriverService.Features.Auth.VerifyEmail;
 
 public sealed class VerifyEmailCommandHandler(
     IOtpService otpService,
-    IKeycloakAdminClient keycloakAdminClient)
+    IKeycloakAdminClient keycloakAdminClient,
+    DriverDbContext dbContext)
     : ICommandHandler<VerifyEmailCommand, Unit>
 {
     public async Task<ErrorOr<Unit>> Handle(
@@ -33,8 +37,17 @@ public sealed class VerifyEmailCommandHandler(
                 description: "Identity sync error. User not found.");
         }
 
+        // ── Step 4: Flip the EmailVerified switch ──────────────────────────────
         await keycloakAdminClient.UpdateUserEmailVerifiedAsync(userId, true, cancellationToken);
 
+        var profile = await dbContext.DriverProfiles.FirstOrDefaultAsync(p => p.Email == command.Email, cancellationToken);
+        if (profile is not null)
+        {
+            profile.SyncEmailVerified(true);
+            await dbContext.SaveChangesAsync(cancellationToken);
+        }
+
+        // ── Step 5: Invalidate OtpCode ──────────────────────────────
         await otpService.InvalidateAsync(command.Email, OtpPurpose.EmailVerification, cancellationToken);
 
         return Unit.Value;

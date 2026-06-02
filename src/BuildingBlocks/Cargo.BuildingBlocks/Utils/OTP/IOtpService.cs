@@ -41,5 +41,6 @@ public interface IOtpService
 public static class OtpPurpose
 {
     public const string EmailVerification = "email-verify";
+    public const string PhoneVerification = "phone-verify";
     public const string PasswordReset = "pwd-reset";
 }

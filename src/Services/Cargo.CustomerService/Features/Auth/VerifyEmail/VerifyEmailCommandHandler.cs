@@ -1,14 +1,18 @@
-﻿using Cargo.BuildingBlocks.CQRS;
+using Cargo.BuildingBlocks.CQRS;
 using Cargo.BuildingBlocks.Security.Keycloak;
 using Cargo.BuildingBlocks.Utils.OTP;
 using ErrorOr;
 using MediatR;
 
+using Cargo.CustomerService.Data;
+using Microsoft.EntityFrameworkCore;
+
 namespace Cargo.CustomerService.Features.Auth.VerifyEmail;
 
 public sealed class VerifyEmailCommandHandler(
     IOtpService otpService,
-    IKeycloakAdminClient keycloakAdminClient)
+    IKeycloakAdminClient keycloakAdminClient,
+    CustomerDbContext dbContext)
     : ICommandHandler<VerifyEmailCommand, Unit>
 {
     public async Task<ErrorOr<Unit>> Handle(
@@ -37,6 +41,13 @@ public sealed class VerifyEmailCommandHandler(
 
         // ── Step 4: Flip the EmailVerified switch ──────────────────────────────
         await keycloakAdminClient.UpdateUserEmailVerifiedAsync(userId, true, cancellationToken);
+
+        var profile = await dbContext.CustomerProfiles.FirstOrDefaultAsync(p => p.Email == command.Email, cancellationToken);
+        if (profile is not null)
+        {
+            profile.SyncEmailVerified(true);
+            await dbContext.SaveChangesAsync(cancellationToken);
+        }
 
         // ── Step 5: Invalidate OtpCode ──────────────────────────────
         await otpService.InvalidateAsync(command.Email, OtpPurpose.EmailVerification, cancellationToken);
