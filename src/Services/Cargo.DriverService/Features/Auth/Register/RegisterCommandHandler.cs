@@ -1,5 +1,6 @@
 using Cargo.BuildingBlocks.CQRS;
 using Cargo.BuildingBlocks.Exceptions;
+using Cargo.BuildingBlocks.Messaging;
 using Cargo.BuildingBlocks.Notifications.Email;
 using Cargo.BuildingBlocks.Security.Keycloak;
 using Cargo.BuildingBlocks.Utils.OTP;
@@ -14,7 +15,7 @@ public sealed class RegisterCommandHandler(
     DriverDbContext dbContext,
     IKeycloakAdminClient keycloakAdminClient,
     IOtpService otpService,
-    IEmailService emailService,
+    INotificationPublisher notificationPublisher,
     ILogger<RegisterCommandHandler> logger)
     : ICommandHandler<RegisterCommand, RegisterResponse>
 {
@@ -98,26 +99,17 @@ public sealed class RegisterCommandHandler(
                 description: "Failed to complete registration. Please try again.");
         }
 
-        // ── Step 5: Send verification OTP ───────────────────────────────
-        try
-        {
-            var otp = await otpService.GenerateAsync(
-                command.Email, OtpPurpose.EmailVerification, cancellationToken);
+        // ── Step 5: Enqueue verification OTP via outbox ─────────────────
+        var otp = await otpService.GenerateAsync(
+            command.Email, OtpPurpose.EmailVerification, cancellationToken);
 
-            await emailService.SendOtpAsync(
+        await notificationPublisher.PublishAsync(
+            NotificationMessage.EmailOtp(
                 command.Email,
                 $"{command.FirstName} {command.LastName}",
                 otp,
-                OtpEmailType.EmailVerification,
-                cancellationToken);
-        }
-        catch (Exception ex)
-        {
-            // Non-critical: profile is saved. User can request re-send.
-            logger.LogWarning(ex,
-                "Verification email failed for {Email} — profile still created.",
-                command.Email);
-        }
+                OtpEmailType.EmailVerification),
+            cancellationToken);
 
         logger.LogInformation(
             "Successfully registered driver {DriverId} for {Email}",

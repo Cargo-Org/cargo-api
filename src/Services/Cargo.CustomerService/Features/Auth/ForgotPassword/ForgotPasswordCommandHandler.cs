@@ -7,13 +7,17 @@ using ErrorOr;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
+// Disambiguate: MediatR also ships an INotificationPublisher
+using INotificationPublisher = Cargo.BuildingBlocks.Messaging.INotificationPublisher;
+using NotificationMessage = Cargo.BuildingBlocks.Messaging.NotificationMessage;
+
 namespace Cargo.CustomerService.Features.Auth.ForgotPassword;
 
 public sealed class ForgotPasswordCommandHandler(
     CustomerDbContext dbContext,
     IKeycloakAdminClient keycloakAdminClient,
     IOtpService otpService,
-    IEmailService emailService,
+    INotificationPublisher notificationPublisher,
     ILogger<ForgotPasswordCommandHandler> logger)
     : ICommandHandler<ForgotPasswordCommand, Unit>
 {
@@ -50,7 +54,7 @@ public sealed class ForgotPasswordCommandHandler(
             return Unit.Value;
         }
 
-        // Generate and send OTP.
+        // Generate OTP and enqueue via outbox.
         try
         {
             var otp = await otpService.GenerateAsync(
@@ -58,18 +62,19 @@ public sealed class ForgotPasswordCommandHandler(
 
             var displayName = profile.FullName ?? "there";
 
-            await emailService.SendOtpAsync(
-                command.Email, displayName, otp,
-                OtpEmailType.PasswordReset, cancellationToken);
+            await notificationPublisher.PublishAsync(
+                NotificationMessage.EmailOtp(
+                    command.Email, displayName, otp, OtpEmailType.PasswordReset),
+                cancellationToken);
 
             logger.LogInformation(
-                "Password reset OTP sent to {Email}", command.Email);
+                "Password reset OTP enqueued for {Email}", command.Email);
         }
         catch (Exception ex)
         {
             // Log but still return success — don't reveal failure to the client.
             logger.LogError(ex,
-                "Failed to send password reset OTP for {Email}", command.Email);
+                "Failed to enqueue password reset OTP for {Email}", command.Email);
         }
 
         return Unit.Value;

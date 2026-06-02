@@ -6,6 +6,9 @@
   <Folder Name="/src/BuildingBlocks/">
     <Project Path="src/BuildingBlocks/Cargo.BuildingBlocks/Cargo.BuildingBlocks.csproj" />
   </Folder>
+  <Folder Name="/src/Services/">
+    <Project Path="src/Services/Cargo.NotificationService/Cargo.NotificationService.csproj" />
+  </Folder>
   <Project Path="src/BuildingBlocks/Cargo.Observability/Cargo.Observability.csproj" />
   <Project Path="src/Gateway/Cargo.Gateway/Cargo.Gateway.csproj" />
   <Project Path="src/Services/Cargo.CustomerService/Cargo.CustomerService.csproj" />

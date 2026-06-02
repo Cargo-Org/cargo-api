@@ -1,5 +1,6 @@
 using Cargo.BuildingBlocks.CQRS;
 using Cargo.BuildingBlocks.Exceptions;
+using Cargo.BuildingBlocks.Messaging;
 using Cargo.BuildingBlocks.Notifications.Email;
 using Cargo.BuildingBlocks.Security.Keycloak;
 using Cargo.BuildingBlocks.Utils.OTP;
@@ -13,7 +14,7 @@ namespace Cargo.CustomerService.Features.Auth.Login;
 public sealed class LoginCommandHandler(
     CustomerDbContext dbContext,
     IOtpService otpService,
-    IEmailService emailService,
+    INotificationPublisher notificationPublisher,
     IKeycloakAdminClient keycloakAdminClient,
     ILogger<LoginCommandHandler> logger)
     : ICommandHandler<LoginCommand, LoginResponse>
@@ -139,9 +140,8 @@ public sealed class LoginCommandHandler(
     }
 
     /// <summary>
-    /// Generates a fresh OTP and emails it.
-    /// OtpService.GenerateAsync handles caching internally —
-    /// do NOT call cache.SetAsync separately (see Bug 2 notes).
+    /// Generates a fresh OTP and enqueues it via the outbox publisher.
+    /// OtpService.GenerateAsync handles caching internally.
     /// </summary>
     private async Task ResendVerificationOtpAsync(
         string email, CancellationToken ct)
@@ -162,8 +162,10 @@ public sealed class LoginCommandHandler(
             var otp = await otpService.GenerateAsync(
                 email, OtpPurpose.EmailVerification, ct);
 
-            await emailService.SendOtpAsync(
-                email, displayName, otp, OtpEmailType.EmailVerification, ct);
+            await notificationPublisher.PublishAsync(
+                NotificationMessage.EmailOtp(
+                    email, displayName, otp, OtpEmailType.EmailVerification),
+                ct);
         }
         catch (Exception ex)
         {

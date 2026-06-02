@@ -112,7 +112,7 @@ builder.Services.AddDbContextPool<CustomerDbContext>(options =>
 // ── Cargo Building Blocks Backing Services ────────────────────────
 builder.Services.AddKeycloakAdmin(builder.Configuration);
 builder.Services.AddOtpAndCache(builder.Configuration);
-builder.Services.AddEmailService(builder.Configuration);
+builder.Services.AddNotificationOutbox<CustomerDbContext>(builder.Configuration);
 builder.Services.AddStorageService(builder.Configuration);
 
 // ── Health Check ─────────────────────────────────────────────────

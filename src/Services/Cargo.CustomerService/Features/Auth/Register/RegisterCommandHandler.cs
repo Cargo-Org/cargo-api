@@ -1,5 +1,6 @@
-﻿using Cargo.BuildingBlocks.CQRS;
+using Cargo.BuildingBlocks.CQRS;
 using Cargo.BuildingBlocks.Exceptions;
+using Cargo.BuildingBlocks.Messaging;
 using Cargo.BuildingBlocks.Notifications.Email;
 using Cargo.BuildingBlocks.Security.Keycloak;
 using Cargo.BuildingBlocks.Utils.OTP;
@@ -14,7 +15,7 @@ public sealed class RegisterCommandHandler(
     CustomerDbContext dbContext,
     IKeycloakAdminClient keycloakAdminClient,
     IOtpService otpService,
-    IEmailService emailService,
+    INotificationPublisher notificationPublisher,
     ILogger<RegisterCommandHandler> logger)
     : ICommandHandler<RegisterCommand, RegisterResponse>
 {
@@ -98,29 +99,20 @@ public sealed class RegisterCommandHandler(
                 description: "Failed to complete registration. Please try again.");
         }
 
-        // ── Step 5: Send verification OTP ───────────────────────────────
-        // ✅ FIXED: GenerateAsync stores the SHA-256 hash in Redis internally.
-        //    Do NOT call cache.SetAsync here — that would store the plain-text
-        //    OTP in a separate Redis key, leaking it in any cache dump.
-        try
-        {
-            var otp = await otpService.GenerateAsync(
-                command.Email, OtpPurpose.EmailVerification, cancellationToken);
+        // ── Step 5: Enqueue verification OTP via outbox ─────────────────
+        // PublishAsync writes to the outbox table and returns immediately.
+        // The OutboxPublisherWorker forwards the message to RabbitMQ in the
+        // background, so this call never blocks the HTTP response on SMTP.
+        var otp = await otpService.GenerateAsync(
+            command.Email, OtpPurpose.EmailVerification, cancellationToken);
 
-            await emailService.SendOtpAsync(
+        await notificationPublisher.PublishAsync(
+            NotificationMessage.EmailOtp(
                 command.Email,
                 $"{command.FirstName} {command.LastName}",
                 otp,
-                OtpEmailType.EmailVerification,
-                cancellationToken);
-        }
-        catch (Exception ex)
-        {
-            // Non-critical: profile is saved. User can request re-send.
-            logger.LogWarning(ex,
-                "Verification email failed for {Email} — profile still created.",
-                command.Email);
-        }
+                OtpEmailType.EmailVerification),
+            cancellationToken);
 
         logger.LogInformation(
             "Successfully registered customer {CustomerId} for {Email}",
