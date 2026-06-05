@@ -1,10 +1,11 @@
+using Cargo.BuildingBlocks.Notifications.Email;
 using MailKit.Net.Smtp;
 using MailKit.Security;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using MimeKit;
 
-namespace Cargo.BuildingBlocks.Notifications.Email;
+namespace Cargo.NotificationService.Notifications.Email;
 
 /// <summary>
 /// Sends transactional emails through Gmail SMTP via MailKit.
@@ -15,7 +16,7 @@ namespace Cargo.BuildingBlocks.Notifications.Email;
 ///   • Is actively maintained and .NET 10 compatible
 ///
 /// Connection lifetime:
-///   A new SmtpClient is created per-send.  For high-volume scenarios,
+///   A new SmtpClient is created per-send. For high-volume scenarios,
 ///   replace this with a pooled/singleton client or a job queue.
 /// </summary>
 public class EmailService(
@@ -78,8 +79,8 @@ public class EmailService(
         var (subject, html, plain) = emailType switch
         {
             OtpEmailType.EmailVerification => BuildVerificationEmail(toName, otp),
-            OtpEmailType.PasswordReset => BuildPasswordResetEmail(toName, otp),
-            _ => throw new ArgumentOutOfRangeException(nameof(emailType))
+            OtpEmailType.PasswordReset     => BuildPasswordResetEmail(toName, otp),
+            _                              => throw new ArgumentOutOfRangeException(nameof(emailType))
         };
 
         return SendAsync(new EmailMessage(toEmail, toName, subject, html, plain), ct);
@@ -164,7 +165,7 @@ public class EmailService(
                                border-bottom:1px solid #2a2a2a;">
                       <p style="margin:0;font-size:18px;font-weight:700;
                                 color:#ffffff;letter-spacing:0.5px;">
-                        Customer Service
+                        Cargo
                       </p>
                     </td>
                   </tr>
@@ -213,7 +214,7 @@ public class EmailService(
                     <td style="padding:20px 40px;border-top:1px solid #2a2a2a;">
                       <p style="margin:0;font-size:12px;color:#444;
                                 text-align:center;">
-                        © 2025 Customer Service · All rights reserved
+                        © 2025 Cargo · All rights reserved
                       </p>
                     </td>
                   </tr>

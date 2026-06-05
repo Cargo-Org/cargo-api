@@ -1,4 +1,4 @@
-﻿using Cargo.CustomerService.Domain.Enums;
+using Cargo.CustomerService.Domain.Enums;
 using System.ComponentModel.DataAnnotations.Schema;
 
 namespace Cargo.CustomerService.Domain.Entities;
@@ -33,6 +33,8 @@ public sealed class CustomerProfile
     // Starts false. Set to true when GET /me detects email_verified=true in JWT.
     public bool IsEmailVerified { get; private set; }
 
+    public bool IsPhoneVerified { get; private set; }
+
     // Never set by client. Always computed by RecomputeOnboardingStatus().
     public OnboardingStatus OnboardingStatus { get; private set; }
 
@@ -66,6 +68,7 @@ public sealed class CustomerProfile
             LastName = lastName,
             PhoneNumber = phoneNumber,
             IsEmailVerified = false,
+            IsPhoneVerified = false,
             OnboardingStatus = OnboardingStatus.MissingFiles,
             CreatedAt = DateTimeOffset.UtcNow,
             UpdatedAt = DateTimeOffset.UtcNow
@@ -85,6 +88,7 @@ public sealed class CustomerProfile
             KeycloakUserId = keycloakUserId,
             Email = email,
             IsEmailVerified = true, // Google-authenticated users are already verified
+            IsPhoneVerified = false, // Phone is not collected yet
             OnboardingStatus = OnboardingStatus.MissingProfileData,
             CreatedAt = DateTimeOffset.UtcNow,
             UpdatedAt = DateTimeOffset.UtcNow
@@ -97,7 +101,13 @@ public sealed class CustomerProfile
     {
         FirstName = firstName;
         LastName = lastName;
-        PhoneNumber = phoneNumber;
+        
+        if (PhoneNumber != phoneNumber)
+        {
+            PhoneNumber = phoneNumber;
+            IsPhoneVerified = false;
+        }
+
         UpdatedAt = DateTimeOffset.UtcNow;
         RecomputeOnboardingStatus();
     }
@@ -106,6 +116,13 @@ public sealed class CustomerProfile
     {
         if (IsEmailVerified == isVerified) return; // No-op if unchanged
         IsEmailVerified = isVerified;
+        UpdatedAt = DateTimeOffset.UtcNow;
+    }
+
+    public void SyncPhoneVerified(bool isVerified)
+    {
+        if (IsPhoneVerified == isVerified) return; // No-op if unchanged
+        IsPhoneVerified = isVerified;
         UpdatedAt = DateTimeOffset.UtcNow;
     }
 

@@ -1,4 +1,4 @@
-﻿namespace Cargo.CustomerService.Features.Profile;
+namespace Cargo.CustomerService.Features.Profile;
 
 public sealed record ProfileResponse(
     Guid CustomerId,
@@ -7,6 +7,7 @@ public sealed record ProfileResponse(
     string? FullName,
     string? PhoneNumber,
     bool IsEmailVerified,
+    bool IsPhoneVerified,
     string OnboardingStatus,
     bool HasRejectedDocuments,
     IReadOnlyList<DocumentSummary> Documents

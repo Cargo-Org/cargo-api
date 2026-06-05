@@ -1,7 +1,7 @@
 namespace Cargo.BuildingBlocks.Utils.OTP;
 
 /// <summary>
-/// Generates and validates cryptographically-secure 6-digit OTP codes.
+/// Generates and validates cryptographically-secure 5-digit OTP codes.
 /// Codes are stored in Redis under a keyed namespace with a fixed TTL.
 /// </summary>
 public interface IOtpService
@@ -41,5 +41,6 @@ public interface IOtpService
 public static class OtpPurpose
 {
     public const string EmailVerification = "email-verify";
+    public const string PhoneVerification = "phone-verify";
     public const string PasswordReset = "pwd-reset";
 }

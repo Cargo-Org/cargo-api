@@ -13,6 +13,8 @@ using Cargo.DriverService.Features.Auth.RefreshToken;
 using Cargo.DriverService.Features.Auth.Register;
 using Cargo.DriverService.Features.Auth.ResetPassword;
 using Cargo.DriverService.Features.Auth.VerifyEmail;
+using Cargo.DriverService.Features.Auth.VerifyPhone;
+using Cargo.DriverService.Features.Auth.RequestEmailVerification;
 using Cargo.DriverService.Features.Documents;
 using Cargo.DriverService.Features.Vehicles;
 using Cargo.DriverService.Features.Profile.GetMyProfile;
@@ -112,7 +114,7 @@ builder.Services.AddDbContextPool<DriverDbContext>(options =>
 // ── Cargo Building Blocks Backing Services ────────────────────────
 builder.Services.AddKeycloakAdmin(builder.Configuration);
 builder.Services.AddOtpAndCache(builder.Configuration);
-builder.Services.AddEmailService(builder.Configuration);
+builder.Services.AddNotificationOutbox<DriverDbContext>(builder.Configuration);
 builder.Services.AddStorageService(builder.Configuration);
 
 // ── Health Check ─────────────────────────────────────────────────
@@ -168,6 +170,8 @@ app.MapRegisterEndpoint();
 app.MapLoginEndpoint();
 app.MapRefreshTokenEndpoint();
 app.MapVerifyEmailEndpoint();
+app.MapVerifyPhoneEndpoint();
+app.MapRequestEmailVerificationEndpoint();
 app.MapGoogleLoginEndpoint();
 app.MapForgotPasswordEndpoint();
 app.MapResetPasswordEndpoint();

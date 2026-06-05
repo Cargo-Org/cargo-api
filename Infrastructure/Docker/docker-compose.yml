@@ -45,6 +45,23 @@ services:
       timeout: 5s
       retries: 5
 
+  rabbitmq:
+    image: rabbitmq:4-management-alpine
+    container_name: dev_rabbitmq
+    restart: unless-stopped
+    networks:
+      - delivery-net
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USERNAME}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD}
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: [ "CMD", "rabbitmq-diagnostics", "ping" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   # =========================================
   # TIER 2: IDENTITY & ACCESS MANAGEMENT
   # =========================================
@@ -104,6 +121,8 @@ services:
         condition: service_healthy
       keycloak-waiter:
         condition: service_completed_successfully
+      rabbitmq:
+        condition: service_healthy
     environment:
       ASPNETCORE_ENVIRONMENT: ${CS_ASPNETCORE_ENVIRONMENT}
       ConnectionStrings__CustomerDb: ${CS_Connection_String}
@@ -120,11 +139,10 @@ services:
       Storage__SecretKey: ${CS_CF_Storage_SecretKey}
       Storage__BucketName: ${CS_CF_Storage_BucketName}
       Storage__ForcePathStyle: ${CS_CF_Storage_ForcePathStyle}
-      EmailSettings__SmtpHost: ${SMTP_HOST}
-      EmailSettings__SmtpPort: ${SMTP_PORT}
-      EmailSettings__From: ${SMTP_FROM}
-      EmailSettings__Password: ${SMTP_PASSWORD}
       REDIS__ConnectionString: ${REDIS_CONNECTION_STRING}
+      RabbitMq__Host: rabbitmq
+      RabbitMq__Username: ${RABBITMQ_USERNAME}
+      RabbitMq__Password: ${RABBITMQ_PASSWORD}
 
   driver-service:
     build:
@@ -139,6 +157,8 @@ services:
         condition: service_healthy
       keycloak-waiter:
         condition: service_completed_successfully
+      rabbitmq:
+        condition: service_healthy
     environment:
       ASPNETCORE_ENVIRONMENT: ${DS_ASPNETCORE_ENVIRONMENT}
       ConnectionStrings__DriverDb: ${DS_Connection_String}
@@ -155,11 +175,33 @@ services:
       Storage__SecretKey: ${DS_CF_Storage_SecretKey}
       Storage__BucketName: ${DS_CF_Storage_BucketName}
       Storage__ForcePathStyle: ${DS_CF_Storage_ForcePathStyle}
+      REDIS__ConnectionString: ${REDIS_CONNECTION_STRING}
+      RabbitMq__Host: rabbitmq
+      RabbitMq__Username: ${RABBITMQ_USERNAME}
+      RabbitMq__Password: ${RABBITMQ_PASSWORD}
+
+  notification-service:
+    build:
+      context: ../../
+      dockerfile: src/Services/Cargo.NotificationService/Dockerfile
+    container_name: cargo_notification
+    restart: unless-stopped
+    networks:
+      - delivery-net
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      ASPNETCORE_ENVIRONMENT: ${NS_ASPNETCORE_ENVIRONMENT}
+      RabbitMq__Host: rabbitmq
+      RabbitMq__Username: ${RABBITMQ_USERNAME}
+      RabbitMq__Password: ${RABBITMQ_PASSWORD}
       EmailSettings__SmtpHost: ${SMTP_HOST}
       EmailSettings__SmtpPort: ${SMTP_PORT}
       EmailSettings__From: ${SMTP_FROM}
       EmailSettings__Password: ${SMTP_PASSWORD}
-      REDIS__ConnectionString: ${REDIS_CONNECTION_STRING}
+      WhatsApp__ApiKey: ${WHATSAPP_API_KEY}
+      WhatsApp__SessionId: ${WHATSAPP_SESSION_ID}
 
   # =========================================
   # TIER 4: API GATEWAY (YARP)
@@ -192,3 +234,4 @@ services:
 volumes:
   postgres_data:
   redis_data:
+  rabbitmq_data:

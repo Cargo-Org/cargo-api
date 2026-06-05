@@ -14,6 +14,8 @@ using Cargo.CustomerService.Features.Auth.RefreshToken;
 using Cargo.CustomerService.Features.Auth.Register;
 using Cargo.CustomerService.Features.Auth.ResetPassword;
 using Cargo.CustomerService.Features.Auth.VerifyEmail;
+using Cargo.CustomerService.Features.Auth.VerifyPhone;
+using Cargo.CustomerService.Features.Auth.RequestEmailVerification;
 using Cargo.CustomerService.Features.Documents;
 using Cargo.CustomerService.Features.Profile.GetMyProfile;
 using Cargo.CustomerService.Features.Profile.UpdateMyProfile;
@@ -112,7 +114,7 @@ builder.Services.AddDbContextPool<CustomerDbContext>(options =>
 // ── Cargo Building Blocks Backing Services ────────────────────────
 builder.Services.AddKeycloakAdmin(builder.Configuration);
 builder.Services.AddOtpAndCache(builder.Configuration);
-builder.Services.AddEmailService(builder.Configuration);
+builder.Services.AddNotificationOutbox<CustomerDbContext>(builder.Configuration);
 builder.Services.AddStorageService(builder.Configuration);
 
 // ── Health Check ─────────────────────────────────────────────────
@@ -168,6 +170,8 @@ app.MapRegisterEndpoint();
 app.MapLoginEndpoint();
 app.MapRefreshTokenEndpoint();
 app.MapVerifyEmailEndpoint();
+app.MapVerifyPhoneEndpoint();
+app.MapRequestEmailVerificationEndpoint();
 app.MapGoogleLoginEndpoint();
 app.MapForgotPasswordEndpoint();
 app.MapResetPasswordEndpoint();

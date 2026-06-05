@@ -7,6 +7,7 @@ public sealed record ProfileResponse(
     string? FullName,
     string? PhoneNumber,
     bool IsEmailVerified,
+    bool IsPhoneVerified,
     string OnboardingStatus,
     bool HasRejectedDocuments,
     IReadOnlyList<DocumentSummary> Documents
