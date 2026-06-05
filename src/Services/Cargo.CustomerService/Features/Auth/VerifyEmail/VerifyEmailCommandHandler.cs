@@ -29,7 +29,7 @@ public sealed class VerifyEmailCommandHandler(
                 description: "Invalid or expired verification code.");
         }
 
-        // ── Step 3: Find User ──────────────────────────────
+        // ── Step 2: Find User ──────────────────────────────
         var userId = await keycloakAdminClient.GetUserIdByEmailAsync(command.Email, cancellationToken);
 
         if (userId is null)
@@ -39,7 +39,7 @@ public sealed class VerifyEmailCommandHandler(
                 description: "Identity sync error. User not found.");
         }
 
-        // ── Step 4: Flip the EmailVerified switch ──────────────────────────────
+        // ── Step 3: Flip the EmailVerified switch ──────────────────────────────
         await keycloakAdminClient.UpdateUserEmailVerifiedAsync(userId, true, cancellationToken);
 
         var profile = await dbContext.CustomerProfiles.FirstOrDefaultAsync(p => p.Email == command.Email, cancellationToken);
@@ -49,7 +49,7 @@ public sealed class VerifyEmailCommandHandler(
             await dbContext.SaveChangesAsync(cancellationToken);
         }
 
-        // ── Step 5: Invalidate OtpCode ──────────────────────────────
+        // ── Step 4: Invalidate OtpCode ──────────────────────────────
         await otpService.InvalidateAsync(command.Email, OtpPurpose.EmailVerification, cancellationToken);
 
         return Unit.Value;

@@ -15,7 +15,7 @@ namespace Cargo.BuildingBlocks.Utils.OTP;
 ///
 /// The cache stores only the HMAC-SHA256 hash of the code, never
 /// the plain-text value, so even a full Redis dump can't be replayed
-/// without brute-forcing the 6-digit space (max 10^6 combos).
+/// without brute-forcing the 5-digit space (max 10^5 combos).
 /// </summary>
 
 public class OtpService(

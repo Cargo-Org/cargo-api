@@ -1,13 +1,10 @@
 using Cargo.BuildingBlocks.CQRS;
-using Cargo.BuildingBlocks.Exceptions;
 using Cargo.BuildingBlocks.Messaging;
-using Cargo.BuildingBlocks.Notifications.Email;
 using Cargo.BuildingBlocks.Security.Keycloak;
 using Cargo.BuildingBlocks.Utils.OTP;
 using Cargo.DriverService.Data;
 using ErrorOr;
 using Microsoft.EntityFrameworkCore;
-using System.IdentityModel.Tokens.Jwt;
 
 namespace Cargo.DriverService.Features.Auth.Login;
 
@@ -19,8 +16,6 @@ public sealed class LoginCommandHandler(
     ILogger<LoginCommandHandler> logger)
     : ICommandHandler<LoginCommand, LoginResponse>
 {
-    private static readonly JwtSecurityTokenHandler _jwtHandler = new();
-
     public async Task<ErrorOr<LoginResponse>> Handle(
         LoginCommand command,
         CancellationToken cancellationToken)
@@ -72,15 +67,20 @@ public sealed class LoginCommandHandler(
                 "Login blocked for {Email} — phone not verified. Resending OTP.",
                 command.Email);
 
+            var otpSent = false;
             if (!string.IsNullOrWhiteSpace(driver.PhoneNumber))
             {
                 await ResendPhoneVerificationOtpAsync(driver.PhoneNumber, cancellationToken);
+                otpSent = true;
             }
+
+            var description = otpSent
+                ? "Your phone number has not been verified. A new verification code has been sent to your WhatsApp."
+                : "Your phone number has not been verified. Please complete your profile to receive a verification code.";
 
             return Error.Unauthorized(
                 code: "Login.PhoneNotVerified",
-                description: "Your phone number has not been verified. " +
-                             "A new verification code has been sent to your WhatsApp.");
+                description: description);
         }
 
         // ── Step 4: Return tokens ───────────────────────────────────────

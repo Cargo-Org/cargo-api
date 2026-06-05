@@ -1,11 +1,10 @@
 using Cargo.BuildingBlocks.CQRS;
+using Cargo.BuildingBlocks.Messaging;
+using Cargo.BuildingBlocks.Utils.OTP;
 using Cargo.CustomerService.Data;
 using Cargo.CustomerService.Domain.Enums;
 using ErrorOr;
 using Microsoft.EntityFrameworkCore;
-
-using Cargo.BuildingBlocks.Messaging;
-using Cargo.BuildingBlocks.Utils.OTP;
 
 namespace Cargo.CustomerService.Features.Profile.UpdateMyProfile;
 
@@ -31,6 +30,12 @@ public sealed class UpdateMyProfileCommandHandler(
                 code: "Profile.NotFound",
                 description: "Customer profile not found.");
 
+        // Capture whether the phone is actually changing before mutating the entity.
+        // UpdateProfile() resets IsPhoneVerified=false only when PhoneNumber changes.
+        // We only want to send an OTP when the phone number itself changed — not on
+        // every update while a previously-unverified phone sits unchanged.
+        var phoneChanged = profile.PhoneNumber != command.PhoneNumber;
+
         // UpdateProfile calls RecomputeOnboardingStatus internally.
         // OnboardingStatus transitions from MissingProfileData → MissingFiles
         // if both fields are now populated.
@@ -38,7 +43,7 @@ public sealed class UpdateMyProfileCommandHandler(
 
         await dbContext.SaveChangesAsync(cancellationToken);
 
-        if (!profile.IsPhoneVerified && !string.IsNullOrWhiteSpace(profile.PhoneNumber))
+        if (phoneChanged && !profile.IsPhoneVerified && !string.IsNullOrWhiteSpace(profile.PhoneNumber))
         {
             try
             {
@@ -76,6 +81,7 @@ public sealed class UpdateMyProfileCommandHandler(
             profile.FullName,
             profile.PhoneNumber,
             profile.IsEmailVerified,
+            profile.IsPhoneVerified,
             profile.OnboardingStatus.ToString(),
             hasRejectedDocuments,
             documents);

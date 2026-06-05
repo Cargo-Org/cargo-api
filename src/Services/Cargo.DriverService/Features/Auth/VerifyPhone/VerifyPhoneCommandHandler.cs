@@ -16,8 +16,22 @@ public sealed class VerifyPhoneCommandHandler(
         VerifyPhoneCommand command,
         CancellationToken cancellationToken)
     {
-        // ── Step 1: Validate OtpCode ──────────────────────────────
-        var isValid = await otpService.ValidateAsync(command.PhoneNumber, OtpPurpose.PhoneVerification, command.OtpCode, cancellationToken);
+        // ── Step 1: Find User Profile ─────────────────────────────────────
+        // Profile lookup happens first so we never burn an OTP against a
+        // phone number that has no corresponding profile.
+        var profile = await dbContext.DriverProfiles
+            .FirstOrDefaultAsync(p => p.PhoneNumber == command.PhoneNumber, cancellationToken);
+
+        if (profile is null)
+        {
+            return Error.NotFound(
+                code: "VerifyPhone.UserNotFound",
+                description: "No account found for this phone number.");
+        }
+
+        // ── Step 2: Validate OtpCode ──────────────────────────────────────
+        var isValid = await otpService.ValidateAsync(
+            command.PhoneNumber, OtpPurpose.PhoneVerification, command.OtpCode, cancellationToken);
 
         if (!isValid)
         {
@@ -26,22 +40,11 @@ public sealed class VerifyPhoneCommandHandler(
                 description: "Invalid or expired verification code.");
         }
 
-        // ── Step 2: Find User Profile ─────────────────────────────
-        var profile = await dbContext.DriverProfiles
-            .FirstOrDefaultAsync(p => p.PhoneNumber == command.PhoneNumber, cancellationToken);
-
-        if (profile is null)
-        {
-            return Error.NotFound(
-                code: "VerifyPhone.UserNotFound",
-                description: "Driver profile not found for this phone number.");
-        }
-
-        // ── Step 3: Flip the PhoneVerified switch ─────────────────
+        // ── Step 3: Flip the PhoneVerified switch ─────────────────────────
         profile.SyncPhoneVerified(true);
         await dbContext.SaveChangesAsync(cancellationToken);
 
-        // ── Step 4: Invalidate OtpCode ────────────────────────────
+        // ── Step 4: Invalidate OtpCode to prevent replay ──────────────────
         await otpService.InvalidateAsync(command.PhoneNumber, OtpPurpose.PhoneVerification, cancellationToken);
 
         return Unit.Value;

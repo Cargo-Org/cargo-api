@@ -1,7 +1,6 @@
 using Cargo.BuildingBlocks.CQRS;
 using Cargo.BuildingBlocks.Exceptions;
 using Cargo.BuildingBlocks.Messaging;
-using Cargo.BuildingBlocks.Notifications.Email;
 using Cargo.BuildingBlocks.Security.Keycloak;
 using Cargo.BuildingBlocks.Utils.OTP;
 using Cargo.CustomerService.Data;
@@ -31,6 +30,14 @@ public sealed class RegisterCommandHandler(
             return Error.Conflict(
                 code: "Registration.EmailAlreadyExists",
                 description: "An account with this email address already exists.");
+
+        var phoneExists = await dbContext.CustomerProfiles
+            .AnyAsync(p => p.PhoneNumber == command.PhoneNumber, cancellationToken);
+
+        if (phoneExists)
+            return Error.Conflict(
+                code: "Registration.PhoneAlreadyExists",
+                description: "An account with this phone number already exists.");
 
         // ── Step 2: Create user in Keycloak ─────────────────────────────
         string keycloakUserId;
@@ -100,17 +107,25 @@ public sealed class RegisterCommandHandler(
         }
 
         // ── Step 5: Enqueue verification OTP via outbox ─────────────────
-        // PublishAsync writes to the outbox table and returns immediately.
-        // The OutboxPublisherWorker forwards the message to RabbitMQ in the
-        // background, so this call never blocks the HTTP response on SMTP.
-        var otp = await otpService.GenerateAsync(
-            command.PhoneNumber, OtpPurpose.PhoneVerification, cancellationToken);
+        // Non-critical: registration already succeeded. If OTP fails,
+        // the user can request a new one at login.
+        try
+        {
+            var otp = await otpService.GenerateAsync(
+                command.PhoneNumber, OtpPurpose.PhoneVerification, cancellationToken);
 
-        await notificationPublisher.PublishAsync(
-            NotificationMessage.WhatsApp(
-                command.PhoneNumber,
-                $"Your Cargo verification code is {otp}. Do not share this code with anyone."),
-            cancellationToken);
+            await notificationPublisher.PublishAsync(
+                NotificationMessage.WhatsApp(
+                    command.PhoneNumber,
+                    $"Your Cargo verification code is {otp}. Do not share this code with anyone."),
+                cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex,
+                "Failed to send phone verification OTP for {PhoneNumber} after registration",
+                command.PhoneNumber);
+        }
 
         logger.LogInformation(
             "Successfully registered customer {CustomerId} for {Email}",

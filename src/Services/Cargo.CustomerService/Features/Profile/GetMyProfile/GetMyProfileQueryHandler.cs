@@ -80,6 +80,7 @@ public sealed class GetMyProfileQueryHandler(
             profile.FullName,
             profile.PhoneNumber,
             profile.IsEmailVerified,
+            profile.IsPhoneVerified,
             profile.OnboardingStatus.ToString(),
             hasRejectedDocuments,
             documents);
