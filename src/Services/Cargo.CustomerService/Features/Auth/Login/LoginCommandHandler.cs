@@ -1,5 +1,6 @@
 using Cargo.BuildingBlocks.CQRS;
 using Cargo.BuildingBlocks.Messaging;
+using Cargo.BuildingBlocks.Notifications.Email;
 using Cargo.BuildingBlocks.Security.Keycloak;
 using Cargo.BuildingBlocks.Utils.OTP;
 using Cargo.CustomerService.Data;
@@ -60,26 +61,19 @@ public sealed class LoginCommandHandler(
                 description: "User profile not found.");
         }
 
-        // ── Step 3: Check Phone Verification ────────────────────────────
-        if (!customer.IsPhoneVerified)
+        // ── Step 3: Check Email Verification ────────────────────────────
+        if (!customer.IsEmailVerified)
         {
             logger.LogWarning(
-                "Login blocked for {Email} — phone not verified. Resending OTP.",
+                "Login blocked for {Email} — email not verified. Resending OTP.",
                 command.Email);
 
-            var otpSent = false;
-            if (!string.IsNullOrWhiteSpace(customer.PhoneNumber))
-            {
-                await ResendPhoneVerificationOtpAsync(customer.PhoneNumber, cancellationToken);
-                otpSent = true;
-            }
+            await ResendEmailVerificationOtpAsync(customer.Email, customer.FullName, cancellationToken);
 
-            var description = otpSent
-                ? "Your phone number has not been verified. A new verification code has been sent to your WhatsApp."
-                : "Your phone number has not been verified. Please complete your profile to receive a verification code.";
+            var description = "Your email has not been verified. A new verification code has been sent to your email.";
 
             return Error.Unauthorized(
-                code: "Login.PhoneNotVerified",
+                code: "Login.EmailNotVerified",
                 description: description);
         }
 
@@ -96,25 +90,27 @@ public sealed class LoginCommandHandler(
 
     // ── Helpers ─────────────────────────────────────────────────────────
 
-    private async Task ResendPhoneVerificationOtpAsync(
-        string phoneNumber, CancellationToken ct)
+    private async Task ResendEmailVerificationOtpAsync(
+        string email, string name, CancellationToken ct)
     {
         try
         {
             var otp = await otpService.GenerateAsync(
-                phoneNumber, OtpPurpose.PhoneVerification, ct);
+                email, OtpPurpose.EmailVerification, ct);
 
             await notificationPublisher.PublishAsync(
-                NotificationMessage.WhatsApp(
-                    phoneNumber,
-                    $"Your Cargo verification code is {otp}. Do not share this code with anyone."),
-                ct);
+                NotificationMessage.EmailOtp(
+                    email,
+                    name,
+                    otp,
+                    OtpEmailType.EmailVerification
+                ), ct);
         }
         catch (Exception ex)
         {
             // Non-critical path — log but don't fail the login response.
             logger.LogError(ex,
-                "Failed to resend verification OTP for {PhoneNumber}", phoneNumber);
+                "Failed to resend verification OTP for {Email}", email);
         }
     }
 }
