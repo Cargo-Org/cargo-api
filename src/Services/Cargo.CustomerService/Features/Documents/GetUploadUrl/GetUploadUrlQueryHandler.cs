@@ -27,7 +27,7 @@ namespace Cargo.CustomerService.Features.Documents.GetUploadUrl
             // 2. Map MIME type to file extension securely
             var ext = request.ContentType.ToLowerInvariant() switch
             {
-                "image/jpeg" => "jpg",
+                "image/jpeg" => "jpeg",
                 "image/jpg" => "jpg",
                 "image/png" => "png",
                 "image/webp" => "webp",
