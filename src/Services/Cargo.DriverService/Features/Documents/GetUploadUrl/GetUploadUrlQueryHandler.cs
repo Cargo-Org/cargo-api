@@ -28,6 +28,7 @@ public class GetUploadUrlQueryHandler(DriverDbContext context, IStorageService s
         var ext = request.ContentType.ToLowerInvariant() switch
         {
             "image/jpeg" => "jpg",
+            "image/jpg" => "jpg",
             "image/png" => "png",
             "image/webp" => "webp",
             "application/pdf" => "pdf",

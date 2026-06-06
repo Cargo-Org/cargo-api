@@ -1,6 +1,7 @@
 using Cargo.BuildingBlocks.CQRS;
 using Cargo.BuildingBlocks.Exceptions;
 using Cargo.BuildingBlocks.Messaging;
+using Cargo.BuildingBlocks.Notifications.Email;
 using Cargo.BuildingBlocks.Security.Keycloak;
 using Cargo.BuildingBlocks.Utils.OTP;
 using Cargo.DriverService.Data;
@@ -112,19 +113,22 @@ public sealed class RegisterCommandHandler(
         try
         {
             var otp = await otpService.GenerateAsync(
-                command.PhoneNumber, OtpPurpose.PhoneVerification, cancellationToken);
+                command.Email, OtpPurpose.EmailVerification, cancellationToken);
 
             await notificationPublisher.PublishAsync(
-                NotificationMessage.WhatsApp(
-                    command.PhoneNumber,
-                    $"Your Cargo verification code is {otp}. Do not share this code with anyone."),
+                NotificationMessage.EmailOtp(
+                    command.Email,
+                    command.FirstName,
+                    otp,
+                    OtpEmailType.EmailVerification
+                    ),
                 cancellationToken);
         }
         catch (Exception ex)
         {
             logger.LogError(ex,
-                "Failed to send phone verification OTP for {PhoneNumber} after registration",
-                command.PhoneNumber);
+                "Failed to send email verification OTP for {Email} after registration",
+                command.Email);
         }
 
         logger.LogInformation(
